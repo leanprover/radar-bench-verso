@@ -24,12 +24,12 @@ def collect_locs(target: Path):
     return locs
 
 
-def append_result(output: Path, metric: str, value, unit = None) -> None:
+def append_result(output: Path, metric: str, value, unit=None) -> None:
     print(f"{metric} -> {value}")
     with open(output, "a") as f:
         # s for sec, B for bytes, % for percentages - say 15 not .15, 100% say .15 not 15
         f.write(json.dumps({"metric": metric, "value": value, "unit": unit}) + "\n")
-            
+
 
 def count_and_output_locs(output: Path, path: Path, locs) -> int:
     if isinstance(locs, int):
@@ -66,12 +66,18 @@ def main() -> None:
     # TODO: make the verso repository contain a specific reference to a version of the
     # reference manual, and then check out that version of the reference manual in the
     # current working directory
-    result = subprocess.check_output(["git", "clone", "--depth=1", "https://github.com/leanprover/reference-manual.git", "--revision=ad9be6e647df870b44166cbf678c2e7b156e48ed"])
+    result = subprocess.check_output(
+        [
+            "git",
+            "clone",
+            "--depth=1",
+            "https://github.com/leanprover/reference-manual.git",
+            "--revision=ad9be6e647df870b44166cbf678c2e7b156e48ed",
+        ]
+    )
     print(result)
 
-    # locs = collect_locs(args.target)
-    # count_and_output_locs(args.output, Path(), locs)
-    append_result(args.output, "test/awesome//loc", .99, "100%")
+    append_result(args.output, "test/awesome//loc", 0.99, "100%")
     append_result(args.output, "test/suspiciousness//loc", 97, "%")
 
 
