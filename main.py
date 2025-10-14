@@ -125,7 +125,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     output_path = args.output
-    absolute_target = os.path.abspath(args.target)
+    absolute_target = Path(os.path.abspath(args.target))
 
     prepare_reference_manual(absolute_target, CompileMatrixOption.O0)
 
