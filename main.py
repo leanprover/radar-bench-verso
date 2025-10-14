@@ -91,7 +91,7 @@ def prepare_reference_manual(
         print("Cannot check out reference manual")
         return False
 
-    subprocess.check_output(
+    subprocess.run(
         ["lake", "update", "--no-ansi"], cwd="reference-manual", check=True
     )
     result = subprocess.run(
