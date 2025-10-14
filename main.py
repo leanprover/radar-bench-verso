@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os.path
 import argparse
 import json
 import subprocess
@@ -70,7 +71,7 @@ def prepare_reference_manual(
             lines = f.readlines()
             for index, line in enumerate(lines):
                 if re.match(r"^require verso from ", line):
-                    lines[index] = f'require verso from "../{verso_directory}"'
+                    lines[index] = f'require verso from "{verso_directory}"'
                 elif re.match(r"^([\s-])+moreLeancArgs := ", line):
                     if option == CompileMatrixOption.OCT_2025:
                         lines[index] = (
@@ -124,8 +125,9 @@ def main() -> None:
     )
     args = parser.parse_args()
     output_path = args.output
+    absolute_target = os.path.abspath(abs.target)
 
-    prepare_reference_manual(args.target, CompileMatrixOption.O0)
+    prepare_reference_manual(absolute_target, CompileMatrixOption.O0)
 
     # locs = collect_locs(args.target)
     # count_and_output_locs(args.output, Path(), locs)
