@@ -133,6 +133,7 @@ def process_output(output: str):
     total_lean = 0.0
     total_object = 0.0
     total_shared = 0.0
+    total_exe = 0.0
 
     for line in output.split("\n"):
         match_val = re.match(
@@ -162,6 +163,15 @@ def process_output(output: str):
             total_shared += parse_time(match_val[4])
             print(f"compiled {match_val[3]} in {match_val[4]}")
             continue
+        match_val = re.match(
+            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/]+):exe \(([A-Za-z0-9.]+)\)$",
+            line,
+        )
+        if match_val:
+            append_result(f"build/single/{match_val[3]}/exe/time", match_val[4])
+            total_exe += parse_time(match_val[4])
+            print(f"compiled {match_val[3]} in {match_val[4]}")
+            continue
         match_val = re.match(r"[^]]*\]\s*Built", line)
         if match_val:
             print(f"MISSED?: {line}", file=sys.stderr)
@@ -171,6 +181,7 @@ def process_output(output: str):
     append_result("build/total/lean", total_lean)
     append_result("build/total/object", total_object)
     append_result("build/total/shared", total_shared)
+    append_result("build/total/exe", total_exe)
 
 
 def main() -> None:
@@ -217,9 +228,13 @@ def main() -> None:
         did_checkout = True
 
     if (did_checkout):
-        compile_reference_manual()
+        did_compile = compile_reference_manual()
     else:
         append_result("compile", 0)
+        did_compile = False
+
+    if (not did_compile):
+        sys.exit(1)
 
     # locs = collect_locs(args.target)
     # count_and_output_locs(args.output, Path(), locs)
