@@ -178,10 +178,10 @@ def process_output(output: str):
         else:
             print(line)
 
-    append_result("build/total/lean", total_lean)
-    append_result("build/total/object", total_object)
-    append_result("build/total/shared", total_shared)
-    append_result("build/total/exe", total_exe)
+    append_result("build/total/lean", total_lean, "s")
+    append_result("build/total/object", total_object, "s")
+    append_result("build/total/shared", total_shared, "s")
+    append_result("build/total/exe", total_exe, "s")
 
 
 def main() -> None:
