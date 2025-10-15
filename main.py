@@ -132,12 +132,10 @@ def parse_time(time: str):
 def process_output(output: str):
     total_lean = 0.0
     totals: dict[str, float] = {}
-    total_shared = 0.0
-    total_exe = 0.0
 
     for line in output.split("\n"):
         match_val = re.match(
-            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/«»]+) \(([A-Za-z0-9.]+)\)$",
+            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.\-/_«»]+) \(([A-Za-z0-9.]+)\)$",
             line,
         )
         if match_val:
@@ -145,7 +143,7 @@ def process_output(output: str):
             total_lean += parse_time(match_val[4])
             continue
         match_val = re.match(
-            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/_«»]+):([A-Za-z0-9.-/_]+) \(([A-Za-z0-9.]+)\)$",
+            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.\-/_«»]+):([A-Za-z0-9.\-/_«»]+) \(([A-Za-z0-9.]+)\)$",
             line,
         )
         if match_val:
@@ -160,7 +158,7 @@ def process_output(output: str):
             print(line)
 
     append_result("build/total/lean", total_lean, "s")
-    for key, total in enumerate(totals):
+    for key, total in enumerate(totals.items()):
         append_result(f"build/total/{key}", total, "s")
 
 def main() -> None:
