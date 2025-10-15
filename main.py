@@ -106,10 +106,7 @@ def prepare_reference_manual(
         print(end - start)
         append_result("build/total/wall", end - start)
         process_output(result.stdout.decode("utf-8"))
-        print(result.stderr.decode("utf-8"))
-        if result.returncode != 0:
-            print(result.stdout.decode("utf-8"))
-            print(result.stderr.decode("utf-8"))
+        print(result.stderr.decode("utf-8"), file=sys.stderr)
         result.check_returncode()
         append_result("compile", 1)
     except subprocess.SubprocessError as e:
@@ -135,7 +132,7 @@ def process_output(output: str):
     total_lean = 0.0
     total_object = 0.0
 
-    for line in str.split("\n"):
+    for line in output.split("\n"):
         match_val = re.match(
             r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-]+) \(([A-Za-z0-9.]+)\)$",
             line,
@@ -154,9 +151,11 @@ def process_output(output: str):
             total_object += parse_time(re[4])
             print(f"compiled {re[3]} in {re[4]}")
             continue
-        match_val = re.match(r"\[[^.]*\]\s*Built")
+        match_val = re.match(r"[^]]*\]\s*Built")
         if match_val:
             print(f"MISSED?: {line}", file=sys.stderr)
+        else:
+            print(line)
 
     append_result("build/total/lean", {total_lean})
     append_result("build/total/object", {total_lean})
