@@ -158,7 +158,7 @@ def process_output(output: str):
             print(line)
 
     append_result("build/total/lean", total_lean, "s")
-    for key, total in enumerate(totals.items()):
+    for key, total in totals.items():
         append_result(f"build/total/{key}", total, "s")
 
 def main() -> None:
