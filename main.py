@@ -93,7 +93,7 @@ def checkout_reference_manual(
         append_result("checkout", 0)
         return False
 
-def compile_reference_manual():
+def compile_reference_manual() -> bool:
     try:
         subprocess.run(
             ["lake", "update", "--no-ansi"], cwd="reference-manual", check=True
@@ -109,12 +109,15 @@ def compile_reference_manual():
         print(result.stderr.decode("utf-8"), file=sys.stderr)
         result.check_returncode()
         append_result("compile", 1)
+        return True
     except subprocess.SubprocessError as e:
         print(f"compilation failed {e}")
         append_result("compile", 0)
+        return False
     except Exception as e:
         print(f"unexpected error {e}")
         append_result("compile", 0)
+        return False
 
 
 def parse_time(time: str):
@@ -139,7 +142,7 @@ def process_output(output: str):
             line,
         )
         if match_val:
-            append_result(f"build/single/{match_val[3]}/lean/time", match_val[4])
+            append_result(f"build/{match_val[3]}//lean", match_val[4])
             total_lean += parse_time(match_val[4])
             continue
         match_val = re.match(
@@ -147,7 +150,7 @@ def process_output(output: str):
             line,
         )
         if match_val:
-            append_result(f"build/single/{match_val[3]}/{match_val[4]}/time", match_val[5])
+            append_result(f"build/{match_val[3]}//{match_val[4]}", match_val[5])
             prev_total = totals.get(match_val[4], 0.0)
             totals[match_val[4]] = prev_total + parse_time(match_val[5])
             continue
@@ -157,9 +160,9 @@ def process_output(output: str):
         else:
             print(line)
 
-    append_result("build/total/lean", total_lean, "s")
+    append_result("build/all//lean", total_lean, "s")
     for key, total in totals.items():
-        append_result(f"build/total/{key}", total, "s")
+        append_result(f"build/all//{key}", total, "s")
 
 def main() -> None:
     global output_path
