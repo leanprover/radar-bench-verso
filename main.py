@@ -7,8 +7,11 @@ import subprocess
 from pathlib import Path
 import re
 from enum import Enum
+import time
+import sys
 
 output_path: Path
+
 
 
 def append_result(metric: str, value: str | float | int, unit=None) -> None:
@@ -92,19 +95,66 @@ def prepare_reference_manual(
         print("Cannot check out reference manual")
         return False
 
-    subprocess.run(
-        ["lake", "update", "--no-ansi"], cwd="reference-manual", check=True
-    )
-    result = subprocess.run(
-        ["lake", "build", "--no-ansi"], cwd="reference-manual", capture_output=True
-    )
-    if result.returncode == 0:
+    try:
+        subprocess.run(
+            ["lake", "update", "--no-ansi"], cwd="reference-manual", check=True
+        )
+        start = time.time()
+        result = subprocess.run(
+            ["lake", "build", "--no-ansi"], cwd="reference-manual", capture_output=True
+        )
+        end: float = time.time()
+        print(end - start)
+        append_result("build/total/wall", end - start)
+        process_output(result.stdout.decode("utf-8"))
+        print(result.stderr.decode("utf-8"))
+        if result.returncode != 0:
+            print(result.stdout.decode("utf-8"))
+            print(result.stderr.decode("utf-8"))
+        result.check_returncode()
         append_result("compile", 1)
-    else:
+    except subprocess.SubprocessError as e:
+        print(f"compilation failed {e}")
+        append_result("compile", 0)
+    except Exception as e:
+        print(f"unexpected error {e}")
         append_result("compile", 0)
 
-    print(result.stderr.decode("utf-8"))
-    print(result.stdout.decode("utf-8"))
+
+def parse_time(str: str):
+    match_val = re.match(r"^([0-9]+)ms$")
+    if (match_val):
+        return float(re[1]) / 100
+    match_val = re.match(r"^([0-9]+)s$")
+    if (match_val):
+        return float(re[1])
+    print(f"cannot parse time {str}")
+    raise Exception("Cannot parse time")
+
+
+def process_output(output: str):
+    total_lean = 0.0
+    total_object = 0.0
+
+    for line in str.split("\n"):
+        match_val = re.match(r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-]+) \(([A-Za-z0-9.]+)\)$", line)
+        if match_val:
+            append_result(f"build/single/{re[3]}/lean/time", re[4])
+            total_lean += parse_time(re[4])
+            print(f"built {re[3]} in {re[4]}")
+            continue
+        match_val = re.match(r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-]+):c.o \(([A-Za-z0-9.]+)\)$", line)
+        if match_val:
+            append_result(f"build/single/{re[3]}/ir/time", re[4])
+            total_object += parse_time(re[4])
+            print(f"compiled {re[3]} in {re[4]}")
+            continue
+        match_val = re.match(r"\[[^.]*\]\s*Built")
+        if match_val:
+           print(f"MISSED?: {line}", file=sys.stderr)
+
+    append_result("build/total/lean", {total_lean})
+    append_result("build/total/object", {total_lean})
 
 
 def main() -> None:
@@ -116,18 +166,30 @@ def main() -> None:
     parser.add_argument(
         "target",
         type=Path,
-        help="path to the repo to be benchmarked",
+        help="path to the Verso repo to be benchmarked",
     )
     parser.add_argument(
         "output",
         type=Path,
         help="path the output file should be written to",
     )
+    parser.add_argument("-o", "--opt", type=str, help="optimization level (O0, oct2025, or none)")
     args = parser.parse_args()
     output_path = args.output
+    opt_level = CompileMatrixOption.UNCHANGED
+    if args.opt == "O0":
+        opt_level = CompileMatrixOption.O0
+    elif args.opt == "oct2025":
+        opt_level = CompileMatrixOption.OCT_2025
+    elif args.opt == "none":
+        opt_level = CompileMatrixOption.NO_ARGS
+    elif args.opt is not None:
+        print(f"unexpected opt level {args.opt}", file=sys.stderr)
+        sys.exit(1)
+
     absolute_target = Path(os.path.abspath(args.target))
 
-    prepare_reference_manual(absolute_target, CompileMatrixOption.O0)
+    prepare_reference_manual(absolute_target, opt_level)
 
     # locs = collect_locs(args.target)
     # count_and_output_locs(args.output, Path(), locs)
