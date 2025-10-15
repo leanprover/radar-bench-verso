@@ -47,9 +47,9 @@ class CompileMatrixOption(Enum):
     UNCHANGED = 4
 
 
-def prepare_reference_manual(
+def checkout_reference_manual(
     verso_directory: Path, option: CompileMatrixOption
-) -> None:
+) -> bool:
     try:
         with open(verso_directory / ".reference_manual_revision") as f:
             reference_manual_revision = "".join(
@@ -87,13 +87,13 @@ def prepare_reference_manual(
             f.write("".join(lines))
 
         append_result("checkout", 1)
+        return True
     except Exception as e:  # noqa: E722
         print(e)
         append_result("checkout", 0)
-        append_result("compile", 0)
-        print("Cannot check out reference manual")
-        return
+        return False
 
+def compile_reference_manual():
     try:
         subprocess.run(
             ["lake", "update", "--no-ansi"], cwd="reference-manual", check=True
@@ -118,23 +118,25 @@ def prepare_reference_manual(
 
 
 def parse_time(time: str):
-    match_val = re.match(r"^([0-9]+)ms$", time)
+    time = time.strip()
+    match_val = re.match(r"([0-9.]+)ms$", time)
     if match_val:
         return float(match_val[1]) / 100
-    match_val = re.match(r"^([0-9]+)s$", time)
+    match_val = re.match(r"([0-9.]+)s$", time)
     if match_val:
         return float(match_val[1])
-    print(f"cannot parse time {str}")
+    print(f"cannot parse time {time}")
     raise Exception("Cannot parse time")
 
 
 def process_output(output: str):
     total_lean = 0.0
     total_object = 0.0
+    total_shared = 0.0
 
     for line in output.split("\n"):
         match_val = re.match(
-            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-]+) \(([A-Za-z0-9.]+)\)$",
+            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/]+) \(([A-Za-z0-9.]+)\)$",
             line,
         )
         if match_val:
@@ -143,12 +145,21 @@ def process_output(output: str):
             print(f"built {match_val[3]} in {match_val[4]}")
             continue
         match_val = re.match(
-            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-]+):c.o \(([A-Za-z0-9.]+)\)$",
+            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/]+):c.o \(([A-Za-z0-9.]+)\)$",
             line,
         )
         if match_val:
-            append_result(f"build/single/{match_val[3]}/ir/time", match_val[4])
+            append_result(f"build/single/{match_val[3]}/lean/time", match_val[4])
             total_object += parse_time(match_val[4])
+            print(f"built {match_val[3]} in {match_val[4]}")
+            continue
+        match_val = re.match(
+            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/]+):shared \(([A-Za-z0-9.]+)\)$",
+            line,
+        )
+        if match_val:
+            append_result(f"build/single/{match_val[3]}/shared/time", match_val[4])
+            total_shared += parse_time(match_val[4])
             print(f"compiled {match_val[3]} in {match_val[4]}")
             continue
         match_val = re.match(r"[^]]*\]\s*Built", line)
@@ -159,6 +170,7 @@ def process_output(output: str):
 
     append_result("build/total/lean", total_lean)
     append_result("build/total/object", total_object)
+    append_result("build/total/shared", total_shared)
 
 
 def main() -> None:
@@ -180,6 +192,9 @@ def main() -> None:
     parser.add_argument(
         "-o", "--opt", type=str, help="optimization level (O0, oct2025, or none)"
     )
+    parser.add_argument(
+        "--skip-checkout", action='store_true'
+    )
     args = parser.parse_args()
     output_path = args.output
     # opt_level = CompileMatrixOption.UNCHANGED
@@ -196,7 +211,15 @@ def main() -> None:
 
     absolute_target = Path(os.path.abspath(args.target))
 
-    prepare_reference_manual(absolute_target, opt_level)
+    if (not args.skip_checkout):
+        did_checkout = checkout_reference_manual(absolute_target, opt_level)
+    else:
+        did_checkout = True
+
+    if (did_checkout):
+        compile_reference_manual()
+    else:
+        append_result("compile", 0)
 
     # locs = collect_locs(args.target)
     # count_and_output_locs(args.output, Path(), locs)
