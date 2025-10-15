@@ -26,14 +26,14 @@ def append_result(metric: str, value: str | float | int, unit=None) -> None:
 
         match_val = re.match(r"([0-9.]+)%", val)
         if match_val:
-            val = match_val.get[1]
+            val = match_val[1]
             unit = "%"
 
         # Supported: s for sec, B for bytes
         match_val = re.match(r"([0-9.]+)([a-zA-Z]+)", val)
         if match_val:
-            val = match_val.get[1]
-            unit = match_val.get[2]
+            val = match_val[1]
+            unit = match_val[2]
 
     print(f"{metric} -> {val}{f'({unit})' if unit else ''}")
     with open(output_path, "a") as f:
@@ -77,12 +77,12 @@ def prepare_reference_manual(
                 elif re.match(r"^([\s-])+moreLeancArgs := ", line):
                     if option == CompileMatrixOption.OCT_2025:
                         lines[index] = (
-                            '  moreLeancArgs := #["-O0", "-mllvm", "-fast-isel", "-mllvm", "-fast-isel-abort=0"]'
+                            '  moreLeancArgs := #["-O0", "-mllvm", "-fast-isel", "-mllvm", "-fast-isel-abort=0"]\n'
                         )
                     elif option == CompileMatrixOption.O0:
-                        lines[index] = '  moreLeancArgs := #["-O0"]'
+                        lines[index] = '  moreLeancArgs := #["-O0"]\n'
                     elif option == CompileMatrixOption.NO_ARGS:
-                        lines[index] = ""
+                        lines[index] = "\n"
         with open(lakefile, "w") as f:
             f.write("".join(lines))
 
@@ -92,7 +92,7 @@ def prepare_reference_manual(
         append_result("checkout", 0)
         append_result("compile", 0)
         print("Cannot check out reference manual")
-        return False
+        return
 
     try:
         subprocess.run(
@@ -117,13 +117,13 @@ def prepare_reference_manual(
         append_result("compile", 0)
 
 
-def parse_time(str: str):
-    match_val = re.match(r"^([0-9]+)ms$")
+def parse_time(time: str):
+    match_val = re.match(r"^([0-9]+)ms$", time)
     if match_val:
-        return float(re[1]) / 100
-    match_val = re.match(r"^([0-9]+)s$")
+        return float(match_val[1]) / 100
+    match_val = re.match(r"^([0-9]+)s$", time)
     if match_val:
-        return float(re[1])
+        return float(match_val[1])
     print(f"cannot parse time {str}")
     raise Exception("Cannot parse time")
 
@@ -138,27 +138,27 @@ def process_output(output: str):
             line,
         )
         if match_val:
-            append_result(f"build/single/{re[3]}/lean/time", re[4])
-            total_lean += parse_time(re[4])
-            print(f"built {re[3]} in {re[4]}")
+            append_result(f"build/single/{match_val[3]}/lean/time", match_val[4])
+            total_lean += parse_time(match_val[4])
+            print(f"built {match_val[3]} in {match_val[4]}")
             continue
         match_val = re.match(
             r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-]+):c.o \(([A-Za-z0-9.]+)\)$",
             line,
         )
         if match_val:
-            append_result(f"build/single/{re[3]}/ir/time", re[4])
-            total_object += parse_time(re[4])
-            print(f"compiled {re[3]} in {re[4]}")
+            append_result(f"build/single/{match_val[3]}/ir/time", match_val[4])
+            total_object += parse_time(match_val[4])
+            print(f"compiled {match_val[3]} in {match_val[4]}")
             continue
-        match_val = re.match(r"[^]]*\]\s*Built")
+        match_val = re.match(r"[^]]*\]\s*Built", line)
         if match_val:
             print(f"MISSED?: {line}", file=sys.stderr)
         else:
             print(line)
 
-    append_result("build/total/lean", {total_lean})
-    append_result("build/total/object", {total_lean})
+    append_result("build/total/lean", total_lean)
+    append_result("build/total/object", total_object)
 
 
 def main() -> None:
