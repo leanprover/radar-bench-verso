@@ -131,46 +131,27 @@ def parse_time(time: str):
 
 def process_output(output: str):
     total_lean = 0.0
-    total_object = 0.0
+    totals: dict[str, float] = {}
     total_shared = 0.0
     total_exe = 0.0
 
     for line in output.split("\n"):
         match_val = re.match(
-            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/]+) \(([A-Za-z0-9.]+)\)$",
+            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/«»]+) \(([A-Za-z0-9.]+)\)$",
             line,
         )
         if match_val:
             append_result(f"build/single/{match_val[3]}/lean/time", match_val[4])
             total_lean += parse_time(match_val[4])
-            print(f"built {match_val[3]} in {match_val[4]}")
             continue
         match_val = re.match(
-            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/_]+):c.o \(([A-Za-z0-9.]+)\)$",
+            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/_«»]+):([A-Za-z0-9.-/_]+) \(([A-Za-z0-9.]+)\)$",
             line,
         )
         if match_val:
-            append_result(f"build/single/{match_val[3]}/lean/time", match_val[4])
-            total_object += parse_time(match_val[4])
-            print(f"built {match_val[3]} in {match_val[4]}")
-            continue
-        match_val = re.match(
-            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/_]+):shared \(([A-Za-z0-9.]+)\)$",
-            line,
-        )
-        if match_val:
-            append_result(f"build/single/{match_val[3]}/shared/time", match_val[4])
-            total_shared += parse_time(match_val[4])
-            print(f"compiled {match_val[3]} in {match_val[4]}")
-            continue
-        match_val = re.match(
-            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/_]+):exe \(([A-Za-z0-9.]+)\)$",
-            line,
-        )
-        if match_val:
-            append_result(f"build/single/{match_val[3]}/exe/time", match_val[4])
-            total_exe += parse_time(match_val[4])
-            print(f"compiled {match_val[3]} in {match_val[4]}")
+            append_result(f"build/single/{match_val[3]}/{match_val[4]}/time", match_val[5])
+            prev_total = totals.get(match_val[4], 0.0)
+            totals[match_val[4]] = prev_total + parse_time(match_val[5])
             continue
         match_val = re.match(r"[^]]*\]\s*Built", line)
         if match_val:
@@ -179,10 +160,8 @@ def process_output(output: str):
             print(line)
 
     append_result("build/total/lean", total_lean, "s")
-    append_result("build/total/object", total_object, "s")
-    append_result("build/total/shared", total_shared, "s")
-    append_result("build/total/exe", total_exe, "s")
-
+    for key, total in enumerate(totals):
+        append_result(f"build/total/{key}", total, "s")
 
 def main() -> None:
     global output_path
