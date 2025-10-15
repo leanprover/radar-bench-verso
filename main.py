@@ -13,7 +13,6 @@ import sys
 output_path: Path
 
 
-
 def append_result(metric: str, value: str | float | int, unit=None) -> None:
     global output_path
     val = str(value)
@@ -123,10 +122,10 @@ def prepare_reference_manual(
 
 def parse_time(str: str):
     match_val = re.match(r"^([0-9]+)ms$")
-    if (match_val):
+    if match_val:
         return float(re[1]) / 100
     match_val = re.match(r"^([0-9]+)s$")
-    if (match_val):
+    if match_val:
         return float(re[1])
     print(f"cannot parse time {str}")
     raise Exception("Cannot parse time")
@@ -137,13 +136,19 @@ def process_output(output: str):
     total_object = 0.0
 
     for line in str.split("\n"):
-        match_val = re.match(r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-]+) \(([A-Za-z0-9.]+)\)$", line)
+        match_val = re.match(
+            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-]+) \(([A-Za-z0-9.]+)\)$",
+            line,
+        )
         if match_val:
             append_result(f"build/single/{re[3]}/lean/time", re[4])
             total_lean += parse_time(re[4])
             print(f"built {re[3]} in {re[4]}")
             continue
-        match_val = re.match(r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-]+):c.o \(([A-Za-z0-9.]+)\)$", line)
+        match_val = re.match(
+            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-]+):c.o \(([A-Za-z0-9.]+)\)$",
+            line,
+        )
         if match_val:
             append_result(f"build/single/{re[3]}/ir/time", re[4])
             total_object += parse_time(re[4])
@@ -151,7 +156,7 @@ def process_output(output: str):
             continue
         match_val = re.match(r"\[[^.]*\]\s*Built")
         if match_val:
-           print(f"MISSED?: {line}", file=sys.stderr)
+            print(f"MISSED?: {line}", file=sys.stderr)
 
     append_result("build/total/lean", {total_lean})
     append_result("build/total/object", {total_lean})
@@ -173,7 +178,9 @@ def main() -> None:
         type=Path,
         help="path the output file should be written to",
     )
-    parser.add_argument("-o", "--opt", type=str, help="optimization level (O0, oct2025, or none)")
+    parser.add_argument(
+        "-o", "--opt", type=str, help="optimization level (O0, oct2025, or none)"
+    )
     args = parser.parse_args()
     output_path = args.output
     opt_level = CompileMatrixOption.UNCHANGED
@@ -193,8 +200,6 @@ def main() -> None:
 
     # locs = collect_locs(args.target)
     # count_and_output_locs(args.output, Path(), locs)
-    append_result("test/awesome//loc", 0.99, "100%")
-    append_result("test/suspiciousness//loc", 97, "%")
 
 
 if __name__ == "__main__":
