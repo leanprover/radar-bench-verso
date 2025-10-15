@@ -146,7 +146,7 @@ def process_output(output: str):
             print(f"built {match_val[3]} in {match_val[4]}")
             continue
         match_val = re.match(
-            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/]+):c.o \(([A-Za-z0-9.]+)\)$",
+            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/_]+):c.o \(([A-Za-z0-9.]+)\)$",
             line,
         )
         if match_val:
@@ -155,7 +155,7 @@ def process_output(output: str):
             print(f"built {match_val[3]} in {match_val[4]}")
             continue
         match_val = re.match(
-            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/]+):shared \(([A-Za-z0-9.]+)\)$",
+            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/_]+):shared \(([A-Za-z0-9.]+)\)$",
             line,
         )
         if match_val:
@@ -164,7 +164,7 @@ def process_output(output: str):
             print(f"compiled {match_val[3]} in {match_val[4]}")
             continue
         match_val = re.match(
-            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/]+):exe \(([A-Za-z0-9.]+)\)$",
+            r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.-/_]+):exe \(([A-Za-z0-9.]+)\)$",
             line,
         )
         if match_val:
