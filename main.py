@@ -68,7 +68,7 @@ def walk_lib_dir():
         ]
         for file in files:
             if file.endswith(".olean"):
-                module = ".".join(module_base + [file[:-2]])
+                module = ".".join(module_base + [file[:-6]])
                 size = os.path.getsize(Path(root) / file)
                 total_olean += size
                 append_result(f"build/{module}", "generated olean", size, "B")
