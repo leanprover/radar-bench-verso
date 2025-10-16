@@ -261,7 +261,7 @@ def main() -> None:
         append_result("build/«generate-manual»", "generated exe", exe_size, "B")
         start: float = time.time()
         subprocess.run(
-            ["lake", "build", "--no-ansi"], cwd="reference-manual", check=True
+            ["./.lake/build/bin/generate-manual", "--depth", "2"], cwd="reference-manual/", check=True
         )
         end: float = time.time()
         append_result("execute", "generation time", end - start, "s")
