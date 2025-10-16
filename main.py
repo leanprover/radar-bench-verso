@@ -13,7 +13,9 @@ import sys
 output_path: Path
 
 
-def append_result(metric: str, submetric: str, value: str | float | int, unit=None) -> None:
+def append_result(
+    metric: str, submetric: str, value: str | float | int, unit=None
+) -> None:
     global output_path
     val = str(value)
 
@@ -37,7 +39,40 @@ def append_result(metric: str, submetric: str, value: str | float | int, unit=No
 
     print(f"{metric} // {submetric} -> {val}{f'({unit})' if unit else ''}")
     with open(output_path, "a") as f:
-        f.write(json.dumps({"metric": f"{metric}//{submetric}", "value": val, "unit": unit}) + "\n")
+        f.write(
+            json.dumps({"metric": f"{metric}//{submetric}", "value": val, "unit": unit})
+            + "\n"
+        )
+
+
+def walk_ir_dir():
+    total_c = 0
+    ir_dir = Path.cwd() / "reference-manual" / ".lake" / "build" / "ir"
+    for root, dirs, files in os.walk(ir_dir):
+        module_base = root.split("reference-manual/.lake/build/ir")[1].split("/")[1:]
+        for file in files:
+            if file.endswith(".c"):
+                module = ".".join(module_base + [file[:-2]])
+                size = os.path.getsize(Path(root) / file)
+                total_c += size
+                append_result(f"build/{module}", "generated C", size, "B")
+    append_result(f"build/.total", "generated C", total_c, "B")
+
+
+def walk_lib_dir():
+    total_olean = 0
+    ir_dir = Path.cwd() / "reference-manual" / ".lake" / "build" / "lib" / "lean"
+    for root, dirs, files in os.walk(ir_dir):
+        module_base = root.split("reference-manual/.lake/build/lib/lean")[1].split("/")[
+            1:
+        ]
+        for file in files:
+            if file.endswith(".olean"):
+                module = ".".join(module_base + [file[:-2]])
+                size = os.path.getsize(Path(root) / file)
+                total_olean += size
+                append_result(f"build/{module}", "generated olean", size, "B")
+    append_result(f"build/.total", "generated olean", total_olean, "B")
 
 
 class CompileMatrixOption(Enum):
@@ -93,12 +128,13 @@ def checkout_reference_manual(
         append_result("checkout", "success", 0)
         return False
 
+
 def compile_reference_manual() -> bool:
     try:
         subprocess.run(
             ["lake", "update", "--no-ansi"], cwd="reference-manual", check=True
         )
-        start = time.time()
+        start: float = time.time()
         result = subprocess.run(
             ["lake", "build", "--no-ansi"], cwd="reference-manual", capture_output=True
         )
@@ -164,6 +200,7 @@ def process_output(output: str):
     for key, total in totals.items():
         append_result("build/.total", f"{key} time", total, "s")
 
+
 def main() -> None:
     global output_path
     parser = argparse.ArgumentParser()
@@ -183,9 +220,7 @@ def main() -> None:
     parser.add_argument(
         "-o", "--opt", type=str, help="optimization level (O0, oct2025, or none)"
     )
-    parser.add_argument(
-        "--skip-checkout", action='store_true'
-    )
+    parser.add_argument("--skip-checkout", action="store_true")
     args = parser.parse_args()
     output_path = args.output
     # opt_level = CompileMatrixOption.UNCHANGED
@@ -202,17 +237,36 @@ def main() -> None:
 
     absolute_target = Path(os.path.abspath(args.target))
 
-    if (not args.skip_checkout):
+    if not args.skip_checkout:
         did_checkout = checkout_reference_manual(absolute_target, opt_level)
     else:
         did_checkout = True
 
-    if (did_checkout):
+    if did_checkout:
         did_compile = compile_reference_manual()
     else:
         did_compile = False
 
-    if (not did_compile):
+    if did_compile:
+        walk_ir_dir()
+        walk_lib_dir()
+        exe_size = os.path.getsize(
+            Path.cwd()
+            / "reference-manual"
+            / ".lake"
+            / "build"
+            / "bin"
+            / "generate-manual"
+        )
+        append_result("build/«generate-manual»", "generated exe", exe_size, "B")
+        start: float = time.time()
+        subprocess.run(
+            ["lake", "build", "--no-ansi"], cwd="reference-manual", check=True
+        )
+        end: float = time.time()
+        append_result("execute", "generation time", end - start, "s")
+
+    else:
         print("signaling failure exit")
         sys.exit(1)
 
