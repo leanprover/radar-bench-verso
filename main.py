@@ -104,7 +104,7 @@ def compile_reference_manual() -> bool:
         )
         end: float = time.time()
         print(end - start)
-        append_result(".build", "wall clock time", end - start)
+        append_result("build/.total", "wall clock time", end - start, "s")
         process_output(result.stdout.decode("utf-8"))
         print(result.stderr.decode("utf-8"), file=sys.stderr)
         result.check_returncode()
@@ -142,7 +142,7 @@ def process_output(output: str):
             line,
         )
         if match_val:
-            append_result(f"{match_val[3]}", "eval time", match_val[4])
+            append_result(f"build/{match_val[3]}", "eval time", match_val[4])
             total_lean += parse_time(match_val[4])
             continue
         match_val = re.match(
@@ -150,7 +150,7 @@ def process_output(output: str):
             line,
         )
         if match_val:
-            append_result(f"{match_val[3]}", f"{match_val[4]} time", match_val[5])
+            append_result(f"build/{match_val[3]}", f"{match_val[4]} time", match_val[5])
             prev_total = totals.get(match_val[4], 0.0)
             totals[match_val[4]] = prev_total + parse_time(match_val[5])
             continue
@@ -160,9 +160,9 @@ def process_output(output: str):
         else:
             print(line)
 
-    append_result(".build total", "eval time", total_lean, "s")
+    append_result("build/.total", "eval time", total_lean, "s")
     for key, total in totals.items():
-        append_result(".build total", f"{key} time", total, "s")
+        append_result("build/.total", f"{key} time", total, "s")
 
 def main() -> None:
     global output_path
@@ -213,6 +213,7 @@ def main() -> None:
         did_compile = False
 
     if (not did_compile):
+        print("signaling failure exit")
         sys.exit(1)
 
     # locs = collect_locs(args.target)
