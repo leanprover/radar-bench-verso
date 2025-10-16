@@ -13,7 +13,7 @@ import sys
 output_path: Path
 
 
-def append_result(metric: str, value: str | float | int, unit=None) -> None:
+def append_result(metric: str, submetric: str, value: str | float | int, unit=None) -> None:
     global output_path
     val = str(value)
 
@@ -35,9 +35,9 @@ def append_result(metric: str, value: str | float | int, unit=None) -> None:
             val = match_val[1]
             unit = match_val[2]
 
-    print(f"{metric} -> {val}{f'({unit})' if unit else ''}")
+    print(f"{metric} // {submetric} -> {val}{f'({unit})' if unit else ''}")
     with open(output_path, "a") as f:
-        f.write(json.dumps({"metric": metric, "value": val, "unit": unit}) + "\n")
+        f.write(json.dumps({"metric": f"{metric}//{submetric}", "value": val, "unit": unit}) + "\n")
 
 
 class CompileMatrixOption(Enum):
@@ -86,11 +86,11 @@ def checkout_reference_manual(
         with open(lakefile, "w") as f:
             f.write("".join(lines))
 
-        append_result("checkout", 1)
+        append_result("checkout", "success", 1)
         return True
     except Exception as e:  # noqa: E722
         print(e)
-        append_result("checkout", 0)
+        append_result("checkout", "success", 0)
         return False
 
 def compile_reference_manual() -> bool:
@@ -104,19 +104,19 @@ def compile_reference_manual() -> bool:
         )
         end: float = time.time()
         print(end - start)
-        append_result("build/total/wall", end - start)
+        append_result(".build", "wall clock time", end - start)
         process_output(result.stdout.decode("utf-8"))
         print(result.stderr.decode("utf-8"), file=sys.stderr)
         result.check_returncode()
-        append_result("compile", 1)
+        append_result("compile", "success", 1)
         return True
     except subprocess.SubprocessError as e:
         print(f"compilation failed {e}")
-        append_result("compile", 0)
+        append_result("compile", "success", 0)
         return False
     except Exception as e:
         print(f"unexpected error {e}")
-        append_result("compile", 0)
+        append_result("compile", "success", 0)
         return False
 
 
@@ -142,7 +142,7 @@ def process_output(output: str):
             line,
         )
         if match_val:
-            append_result(f"build/{match_val[3]}//lean", match_val[4])
+            append_result(f"{match_val[3]}", "eval time", match_val[4])
             total_lean += parse_time(match_val[4])
             continue
         match_val = re.match(
@@ -150,7 +150,7 @@ def process_output(output: str):
             line,
         )
         if match_val:
-            append_result(f"build/{match_val[3]}//{match_val[4]}", match_val[5])
+            append_result(f"{match_val[3]}", f"{match_val[4]} time", match_val[5])
             prev_total = totals.get(match_val[4], 0.0)
             totals[match_val[4]] = prev_total + parse_time(match_val[5])
             continue
@@ -160,9 +160,9 @@ def process_output(output: str):
         else:
             print(line)
 
-    append_result("build/all//lean", total_lean, "s")
+    append_result(".build total", "eval time", total_lean, "s")
     for key, total in totals.items():
-        append_result(f"build/all//{key}", total, "s")
+        append_result(".build total", f"{key} time", total, "s")
 
 def main() -> None:
     global output_path
@@ -210,7 +210,6 @@ def main() -> None:
     if (did_checkout):
         did_compile = compile_reference_manual()
     else:
-        append_result("compile", 0)
         did_compile = False
 
     if (not did_compile):
