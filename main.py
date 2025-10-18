@@ -9,12 +9,17 @@ import re
 from enum import Enum
 import time
 import sys
+from types import Any
 
 output_path: Path
 
 
 def append_result(
-    metric: str, submetric: str, value: str | float | int, unit=None
+    metric: str,
+    submetric: str,
+    value: str | float | int,
+    unit=None,
+    more_is_better: Any = False,
 ) -> None:
     global output_path
     val = str(value)
@@ -40,7 +45,14 @@ def append_result(
     print(f"{metric} // {submetric} -> {val}{f'({unit})' if unit else ''}")
     with open(output_path, "a") as f:
         f.write(
-            json.dumps({"metric": f"{metric}//{submetric}", "value": val, "unit": unit})
+            json.dumps(
+                {
+                    "metric": f"{metric}//{submetric}",
+                    "value": val,
+                    "unit": unit,
+                    "direction": 1 if more_is_better else -1,
+                }
+            )
             + "\n"
         )
 
@@ -261,7 +273,9 @@ def main() -> None:
         append_result("build/«generate-manual»", "generated exe", exe_size, "B")
         start: float = time.time()
         subprocess.run(
-            ["./.lake/build/bin/generate-manual", "--depth", "2"], cwd="reference-manual/", check=True
+            ["./.lake/build/bin/generate-manual", "--depth", "2"],
+            cwd="reference-manual/",
+            check=True,
         )
         end: float = time.time()
         append_result("execute", "generation time", end - start, "s")
