@@ -9,7 +9,7 @@ import re
 from enum import Enum
 import time
 import sys
-from types import Any
+from typing import Any
 
 output_path: Path
 
