@@ -238,19 +238,27 @@ def main() -> None:
     args = parser.parse_args()
     output_path = args.output
     # opt_level = CompileMatrixOption.UNCHANGED
-    opt_level: CompileMatrixOption = CompileMatrixOption.NO_ARGS
+    opt_level: CompileMatrixOption = CompileMatrixOption.UNCHANGED
     if args.opt == "O0":
         opt_level = CompileMatrixOption.O0
-        root = "refman"
     elif args.opt == "oct2025":
         opt_level = CompileMatrixOption.OCT_2025
-        root = "refman-tuned"
     elif args.opt == "none":
         opt_level = CompileMatrixOption.NO_ARGS
-        root = "refman-defaults"
     elif args.opt is not None:
         print(f"unexpected opt level {args.opt}", file=sys.stderr)
         sys.exit(1)
+
+    if opt_level == CompileMatrixOption.O0:
+        root = "refman-o0"
+    elif opt_level == CompileMatrixOption.UNCHANGED:
+        root = "refman-unchnaged"
+    elif opt_level == CompileMatrixOption.NO_ARGS:
+        root = "refman-no-opt-args"
+    elif opt_level == CompileMatrixOption.OCT_2025:
+        root = "refman-opt-oct-2025"
+    else:
+        root = "refman-other"
 
     absolute_target = Path(os.path.abspath(args.target))
 
