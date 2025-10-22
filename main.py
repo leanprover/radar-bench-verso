@@ -12,7 +12,7 @@ import sys
 from typing import Any
 
 output_path: Path
-root: str = "refman"
+root: str
 
 def append_result(
     metric: str,
@@ -89,7 +89,6 @@ def walk_lib_dir():
 
 
 class CompileMatrixOption(Enum):
-    OCT_2025 = 1
     O0 = 2
     NO_ARGS = 3
     UNCHANGED = 4
@@ -248,12 +247,10 @@ def main() -> None:
     args = parser.parse_args()
     output_path = args.output
     # opt_level = CompileMatrixOption.UNCHANGED
-    opt_level: CompileMatrixOption = CompileMatrixOption.NO_ARGS
-    if args.opt == "O0":
+    opt_level: CompileMatrixOption = CompileMatrixOption.UNCHANGED
+    if args.opt == "o0":
         opt_level = CompileMatrixOption.O0
-    elif args.opt == "oct2025":
-        opt_level = CompileMatrixOption.OCT_2025
-    elif args.opt == "none":
+    elif args.opt == "no-opt-args":
         opt_level = CompileMatrixOption.NO_ARGS
     elif args.opt is not None:
         print(f"unexpected opt level {args.opt}", file=sys.stderr)
@@ -262,11 +259,9 @@ def main() -> None:
     if opt_level == CompileMatrixOption.O0:
         root = "refman-o0"
     elif opt_level == CompileMatrixOption.UNCHANGED:
-        root = "refman-unchanged"
+        root = "refman"
     elif opt_level == CompileMatrixOption.NO_ARGS:
         root = "refman-no-opt-args"
-    elif opt_level == CompileMatrixOption.OCT_2025:
-        root = "refman-opt-oct-2025"
     else:
         root = "refman-other"
 
