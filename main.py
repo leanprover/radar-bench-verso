@@ -238,7 +238,7 @@ def main() -> None:
     args = parser.parse_args()
     output_path = args.output
     # opt_level = CompileMatrixOption.UNCHANGED
-    opt_level: CompileMatrixOption = CompileMatrixOption.UNCHANGED
+    opt_level: CompileMatrixOption = CompileMatrixOption.O0
     if args.opt == "O0":
         opt_level = CompileMatrixOption.O0
     elif args.opt == "oct2025":
