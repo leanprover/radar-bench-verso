@@ -124,11 +124,7 @@ def checkout_reference_manual(
                 if re.match(r"^require verso from ", line):
                     lines[index] = f'require verso from "{verso_directory}"'
                 elif re.match(r"^([\s-])+moreLeancArgs := ", line):
-                    if option == CompileMatrixOption.OCT_2025:
-                        lines[index] = (
-                            '  moreLeancArgs := #["-O0", "-mllvm", "-fast-isel", "-mllvm", "-fast-isel-abort=0"]\n'
-                        )
-                    elif option == CompileMatrixOption.O0:
+                    if option == CompileMatrixOption.O0:
                         lines[index] = '  moreLeancArgs := #["-O0"]\n'
                     elif option == CompileMatrixOption.NO_ARGS:
                         lines[index] = "\n"
