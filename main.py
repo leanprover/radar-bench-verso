@@ -119,7 +119,9 @@ def checkout_reference_manual(
         lakefile: Path = Path.cwd() / "reference-manual" / "lakefile.lean"
         with open(lakefile) as f:
             lines = f.readlines()
+            count = 0
             for index, line in enumerate(lines):
+                count += 1
                 if re.match(r"^require verso from ", line):
                     lines[index] = f'require verso from "{verso_directory}"'
                 elif re.match(r"^([\s-])+moreLeancArgs := ", line):
@@ -131,6 +133,14 @@ def checkout_reference_manual(
                         lines[index] = '  moreLeancArgs := #["-O0"]\n'
                     elif option == CompileMatrixOption.NO_ARGS:
                         lines[index] = "\n"
+                    elif option == CompileMatrixOption.UNCHANGED:
+                        pass
+                    else:
+                        count -= 1
+                else:
+                    count -= 1
+            if count != 2:
+                print(f"WARNING: expected to rewrite 2 lines, rewrote {count}", file = sys.stderr)
         with open(lakefile, "w") as f:
             f.write("".join(lines))
 
@@ -238,7 +248,7 @@ def main() -> None:
     args = parser.parse_args()
     output_path = args.output
     # opt_level = CompileMatrixOption.UNCHANGED
-    opt_level: CompileMatrixOption = CompileMatrixOption.O0
+    opt_level: CompileMatrixOption = CompileMatrixOption.NO_ARGS
     if args.opt == "O0":
         opt_level = CompileMatrixOption.O0
     elif args.opt == "oct2025":
