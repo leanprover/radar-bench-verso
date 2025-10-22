@@ -12,7 +12,7 @@ import sys
 from typing import Any
 
 output_path: Path
-
+root: str = "refman"
 
 def append_result(
     metric: str,
@@ -22,6 +22,7 @@ def append_result(
     more_is_better: Any = False,
 ) -> None:
     global output_path
+    global root
     val = str(value)
 
     # Infer units a little bit
@@ -47,7 +48,7 @@ def append_result(
         f.write(
             json.dumps(
                 {
-                    "metric": f"{metric}//{submetric}",
+                    "metric": f"{root}/{metric}//{submetric}",
                     "value": val,
                     "unit": unit,
                     "direction": 1 if more_is_better else -1,
@@ -215,6 +216,7 @@ def process_output(output: str):
 
 def main() -> None:
     global output_path
+    global root
     parser = argparse.ArgumentParser()
 
     # target and output are positional and defined by the Radar infrastructure
@@ -239,10 +241,13 @@ def main() -> None:
     opt_level: CompileMatrixOption = CompileMatrixOption.O0
     if args.opt == "O0":
         opt_level = CompileMatrixOption.O0
+        root = "refman"
     elif args.opt == "oct2025":
         opt_level = CompileMatrixOption.OCT_2025
+        root = "refman-tuned"
     elif args.opt == "none":
         opt_level = CompileMatrixOption.NO_ARGS
+        root = "refman-defaults"
     elif args.opt is not None:
         print(f"unexpected opt level {args.opt}", file=sys.stderr)
         sys.exit(1)
