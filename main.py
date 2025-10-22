@@ -252,7 +252,7 @@ def main() -> None:
     if opt_level == CompileMatrixOption.O0:
         root = "refman-o0"
     elif opt_level == CompileMatrixOption.UNCHANGED:
-        root = "refman-unchnaged"
+        root = "refman-unchanged"
     elif opt_level == CompileMatrixOption.NO_ARGS:
         root = "refman-no-opt-args"
     elif opt_level == CompileMatrixOption.OCT_2025:
