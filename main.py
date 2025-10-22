@@ -238,7 +238,7 @@ def main() -> None:
     args = parser.parse_args()
     output_path = args.output
     # opt_level = CompileMatrixOption.UNCHANGED
-    opt_level: CompileMatrixOption = CompileMatrixOption.O0
+    opt_level: CompileMatrixOption = CompileMatrixOption.NO_ARGS
     if args.opt == "O0":
         opt_level = CompileMatrixOption.O0
         root = "refman"
