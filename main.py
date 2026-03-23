@@ -58,11 +58,14 @@ def append_result(
             + "\n"
         )
 
+
 def walk_ir_dir(project_directory: str):
     total_c = 0
     ir_dir = Path.cwd() / project_directory / ".lake" / "build" / "ir"
     for root, dirs, files in os.walk(ir_dir):
-        module_base = root.split(f"{project_directory}/.lake/build/ir")[1].split("/")[1:]
+        module_base = root.split(f"{project_directory}/.lake/build/ir")[1].split("/")[
+            1:
+        ]
         for file in files:
             if file.endswith(".c"):
                 module = ".".join(module_base + [file[:-2]])
@@ -71,13 +74,14 @@ def walk_ir_dir(project_directory: str):
                 append_result(f"build/{module}", "generated C", size, "B")
     append_result("build/.total", "generated C", total_c, "B")
 
+
 def walk_lib_dir(project_directory: str):
     total_olean = 0
     ir_dir = Path.cwd() / project_directory / ".lake" / "build" / "lib" / "lean"
     for root, dirs, files in os.walk(ir_dir):
-        module_base = root.split(f"{project_directory}/.lake/build/lib/lean")[1].split("/")[
-            1:
-        ]
+        module_base = root.split(f"{project_directory}/.lake/build/lib/lean")[1].split(
+            "/"
+        )[1:]
         for file in files:
             if file.endswith(".olean"):
                 module = ".".join(module_base + [file[:-6]])
@@ -86,7 +90,14 @@ def walk_lib_dir(project_directory: str):
                 append_result(f"build/{module}", "generated olean", size, "B")
     append_result("build/.total", "generated olean", total_olean, "B")
 
-def checkout_project(verso_directory: Path, gitUrl: str, project_directory: str = "project", useO0: bool = False, branch: str = "main"):
+
+def checkout_project(
+    verso_directory: Path,
+    gitUrl: str,
+    project_directory: str = "project",
+    useO0: bool = False,
+    branch: str = "main",
+):
     """
     Checkout a suitably structured Verso project in an indicated directory.
     The project is rewritten to use the toolchain (& corresponding packages)
@@ -97,9 +108,11 @@ def checkout_project(verso_directory: Path, gitUrl: str, project_directory: str 
         with open(verso_directory / "lean-toolchain") as f:
             versos_lean_toolchain = f.read().strip()
             if not versos_lean_toolchain.startswith("leanprover/lean4:"):
-                print(f"lean toolchain for verso isn't a lean4 version: {versos_lean_toolchain}")
+                print(
+                    f"lean toolchain for verso isn't a lean4 version: {versos_lean_toolchain}"
+                )
             verso_lean_version = versos_lean_toolchain[17:]
-        
+
         subprocess.run(
             [
                 "git",
@@ -107,7 +120,7 @@ def checkout_project(verso_directory: Path, gitUrl: str, project_directory: str 
                 "--depth=1",
                 gitUrl,
                 f"--branch={branch}",
-                project_directory
+                project_directory,
             ],
             capture_output=True,
             check=True,
@@ -118,7 +131,9 @@ def checkout_project(verso_directory: Path, gitUrl: str, project_directory: str 
         with open(Path.cwd() / project_directory / "lean-toolchain") as f:
             project_lean_toolchain = f.read().strip()
             if not versos_lean_toolchain.startswith("leanprover/lean4:"):
-                print(f"lean toolchain for project isn't a lean4 version: {project_lean_toolchain}")
+                print(
+                    f"lean toolchain for project isn't a lean4 version: {project_lean_toolchain}"
+                )
             project_lean_version = project_lean_toolchain[17:]
         with open(Path.cwd() / project_directory / "lean-toolchain", "w") as f:
             f.write(versos_lean_toolchain)
@@ -134,7 +149,9 @@ def checkout_project(verso_directory: Path, gitUrl: str, project_directory: str 
                 elif re.match(r"^package", line) and useO0:
                     lines[index] = line + '  moreLeancArgs := #["-O0"]\n'
                 else:
-                    lines[index] = line.replace(project_lean_version, verso_lean_version)
+                    lines[index] = line.replace(
+                        project_lean_version, verso_lean_version
+                    )
         with open(lakefile, "w") as f:
             f.write("".join(lines))
         return True
@@ -143,14 +160,19 @@ def checkout_project(verso_directory: Path, gitUrl: str, project_directory: str 
         append_result("checkout", "success", 0)
         return False
 
+
 def project_build_default(project_directory: str) -> bool:
     try:
         subprocess.run(
-            ["lake", "update", "--no-ansi", "--keep-toolchain"], cwd=project_directory, check=True
+            ["lake", "update", "--no-ansi", "--keep-toolchain"],
+            cwd=project_directory,
+            check=True,
         )
         start: float = time.time()
         result = subprocess.run(
-            ["lake", "build", "--no-ansi", "--keep-toolchain"], cwd=project_directory, capture_output=True
+            ["lake", "build", "--no-ansi", "--keep-toolchain"],
+            cwd=project_directory,
+            capture_output=True,
         )
         end: float = time.time()
         print(end - start)
@@ -169,12 +191,15 @@ def project_build_default(project_directory: str) -> bool:
         append_result("build/default", "success", 0)
         return False
 
+
 def project_build_exe(project_directory: str, name: str) -> bool:
     try:
         subprocess.run
         start: float = time.time()
         result = subprocess.run(
-            ["lake", "build", name, "--no-ansi", "--keep-toolchain"], cwd=project_directory, capture_output=True
+            ["lake", "build", name, "--no-ansi", "--keep-toolchain"],
+            cwd=project_directory,
+            capture_output=True,
         )
         end: float = time.time()
         print(end - start)
@@ -189,6 +214,7 @@ def project_build_exe(project_directory: str, name: str) -> bool:
         append_result("build/exe", "success", 0)
         return False
 
+
 def parse_time(time: str):
     time = time.strip()
     match_val = re.match(r"([0-9.]+)ms$", time)
@@ -200,8 +226,11 @@ def parse_time(time: str):
     print(f"cannot parse time {time}")
     raise Exception("Cannot parse time")
 
+
 total_eval_time: float = 0
 total_key_time: dict[str, float] = {}
+
+
 def process_output(prefix: str, output: str):
     global total_eval_time
     global total_key_time
@@ -223,7 +252,9 @@ def process_output(prefix: str, output: str):
             line,
         )
         if match_val:
-            append_result(f"{prefix}/{match_val[3]}", f"{match_val[4]} time", match_val[5])
+            append_result(
+                f"{prefix}/{match_val[3]}", f"{match_val[4]} time", match_val[5]
+            )
             prev_total = totals.get(match_val[4], 0.0)
             totals[match_val[4]] = prev_total + parse_time(match_val[5])
             continue
@@ -236,7 +267,8 @@ def process_output(prefix: str, output: str):
     append_result(f"{prefix}/.total", "eval time", total_lean, "s")
     total_eval_time += total_lean
     for key, total in totals.items():
-        if key not in total_key_time: total_key_time[key] = 0
+        if key not in total_key_time:
+            total_key_time[key] = 0
         total_key_time[key] += total
         append_result(f"{prefix}/.total", f"{key} time", total, "s")
 
@@ -263,9 +295,7 @@ def main() -> None:
     parser.add_argument(
         "-o", "--opt", type=str, help="optimization level o0 or no-opt-args)"
     )
-    parser.add_argument(
-        "-p", "--project", type=str, help="project)"
-    )
+    parser.add_argument("-p", "--project", type=str, help="project)")
     parser.add_argument("--skip-checkout", action="store_true")
     args = parser.parse_args()
     output_path = args.output
@@ -278,7 +308,7 @@ def main() -> None:
 
     if args.project == "lean4cs1":
         binary = "build-doc"
-        directory = "Lean4CS1"
+        directory = "lean4-cs1"
         git_url = "https://github.com/robsimmons/Lean4CS1.git"
         git_branch = "verso"
         root = "lean4cs1"
@@ -292,7 +322,13 @@ def main() -> None:
     absolute_target = Path(os.path.abspath(args.target))
 
     if not args.skip_checkout:
-        did_checkout = checkout_project(absolute_target, git_url, branch = git_branch, useO0 = use_o0_optimization)
+        did_checkout = checkout_project(
+            absolute_target,
+            git_url,
+            branch=git_branch,
+            useO0=use_o0_optimization,
+            project_directory=directory,
+        )
     else:
         did_checkout = True
 
@@ -312,12 +348,7 @@ def main() -> None:
         walk_ir_dir(directory)
         walk_lib_dir(directory)
         exe_size = os.path.getsize(
-            Path.cwd()
-            / directory
-            / ".lake"
-            / "build"
-            / "bin"
-            / binary
+            Path.cwd() / directory / ".lake" / "build" / "bin" / binary
         )
         append_result("build/exe", "generated exe", exe_size, "B")
         start: float = time.time()
@@ -336,6 +367,7 @@ def main() -> None:
     else:
         print("signaling failure exit")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
