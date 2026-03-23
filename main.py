@@ -14,6 +14,7 @@ from typing import Any
 output_path: Path
 root: str
 
+
 def append_result(
     metric: str,
     submetric: str,
@@ -71,7 +72,6 @@ def walk_ir_dir():
                 append_result(f"build/{module}", "generated C", size, "B")
     append_result(f"build/.total", "generated C", total_c, "B")
 
-
 def walk_lib_dir():
     total_olean = 0
     ir_dir = Path.cwd() / "reference-manual" / ".lake" / "build" / "lib" / "lean"
@@ -93,6 +93,56 @@ class CompileMatrixOption(Enum):
     NO_ARGS = 3
     UNCHANGED = 4
 
+def checkout_project(verso_directory: Path, gitUrl: str, optLevel: CompileMatrixOption, project_directory: str = "project", branch: str = "main"):
+    try:
+        with open(verso_directory / "lean-toolchain") as f:
+            versos_lean_toolchain = f.read().strip()
+            if not versos_lean_toolchain.startswith("leanprover/lean4:"):
+                print(f"lean toolchain for verso isn't a lean4 version: {versos_lean_toolchain}")
+            verso_lean_version = versos_lean_toolchain[17:]
+        
+        subprocess.run(
+            [
+                "git",
+                "clone",
+                "--depth=1",
+                gitUrl,
+                f"--branch={branch}",
+                project_directory
+            ],
+            capture_output=True,
+            check=True,
+        )
+
+        # Before we replace the project's lean toolchain, read it so
+        # we can use it to rewrite the lakefile
+        with open(Path.cwd() / project_directory / "lean-toolchain") as f:
+            project_lean_toolchain = f.read().strip()
+            if not versos_lean_toolchain.startswith("leanprover/lean4:"):
+                print(f"lean toolchain for project isn't a lean4 version: {project_lean_toolchain}")
+            project_lean_version = project_lean_toolchain[17:]
+        with open(Path.cwd() / project_directory / "lean-toolchain", "w") as f:
+            f.write(versos_lean_toolchain)
+
+        lakefile: Path = Path.cwd() / project_directory / "lakefile.lean"
+        with open(lakefile) as f:
+            lines = f.readlines()
+            count = 0
+            for index, line in enumerate(lines):
+                count += 1
+                if re.match(r"^require verso from ", line):
+                    lines[index] = f'require verso from "{verso_directory}"'
+                else:
+                    lines[index] = line.replace(project_lean_version, verso_lean_version)
+        if optLevel == CompileMatrixOption.O0:
+            lines += ['\nmoreLeancArgs := #["-O0"]']
+        with open(lakefile, "w") as f:
+            f.write("".join(lines))
+        return True
+    except Exception as e:
+        print(e)
+        append_result("checkout", "success", 0)
+        return False
 
 def checkout_reference_manual(
     verso_directory: Path, option: CompileMatrixOption
@@ -135,44 +185,66 @@ def checkout_reference_manual(
                 else:
                     count -= 1
             if count != 2:
-                print(f"WARNING: expected to rewrite 2 lines, rewrote {count}", file = sys.stderr)
+                print(
+                    f"WARNING: expected to rewrite 2 lines, rewrote {count}",
+                    file=sys.stderr,
+                )
         with open(lakefile, "w") as f:
             f.write("".join(lines))
 
         append_result("checkout", "success", 1)
         return True
-    except Exception as e:  # noqa: E722
+    except Exception as e:
         print(e)
         append_result("checkout", "success", 0)
         return False
 
 
-def compile_reference_manual() -> bool:
+def project_build_default(project_directory: str) -> bool:
     try:
         subprocess.run(
-            ["lake", "update", "--no-ansi"], cwd="reference-manual", check=True
+            ["lake", "update", "--no-ansi", "--keep-toolchain"], cwd=project_directory, check=True
         )
         start: float = time.time()
         result = subprocess.run(
-            ["lake", "build", "--no-ansi"], cwd="reference-manual", capture_output=True
+            ["lake", "build", "--no-ansi", "--keep-toolchain"], cwd=project_directory, capture_output=True
         )
         end: float = time.time()
         print(end - start)
-        append_result("build/.total", "wall clock time", end - start, "s")
-        process_output(result.stdout.decode("utf-8"))
+        append_result("build/default/.total", "wall clock time", end - start, "s")
+        process_output("build/default", result.stdout.decode("utf-8"))
         print(result.stderr.decode("utf-8"), file=sys.stderr)
         result.check_returncode()
-        append_result("compile", "success", 1)
+        append_result("build/default", "success", 1)
         return True
     except subprocess.SubprocessError as e:
         print(f"compilation failed {e}")
-        append_result("compile", "success", 0)
+        append_result("build/default", "success", 0)
         return False
     except Exception as e:
         print(f"unexpected error {e}")
-        append_result("compile", "success", 0)
+        append_result("build/default", "success", 0)
         return False
 
+def project_build_exe(project_directory: str, name: str) -> bool:
+    try:
+        subprocess.run
+        start: float = time.time()
+        result = subprocess.run(
+            ["lake", "build", name, "--no-ansi", "--keep-toolchain"], cwd=project_directory, capture_output=True
+        )
+        end: float = time.time()
+        print(end - start)
+        append_result("build/exe/.total", "wall clock time", end - start, "s")
+        process_output("build/exe", result.stdout.decode("utf-8"))
+        print(result.stderr.decode("utf-8"), file=sys.stderr)
+        result.check_returncode()
+        append_result("build/exe", "success", 1)
+        return True
+    except Exception as e:
+        print(f"unexpected error {e}")
+        append_result("build/exe", "success", 0)
+        return False
 
 def parse_time(time: str):
     time = time.strip()
@@ -186,7 +258,7 @@ def parse_time(time: str):
     raise Exception("Cannot parse time")
 
 
-def process_output(output: str):
+def process_output(prefix: str, output: str):
     total_lean = 0.0
     totals: dict[str, float] = {}
 
@@ -196,7 +268,7 @@ def process_output(output: str):
             line,
         )
         if match_val:
-            append_result(f"build/{match_val[3]}", "eval time", match_val[4])
+            append_result(f"{prefix}/{match_val[3]}", "eval time", match_val[4])
             total_lean += parse_time(match_val[4])
             continue
         match_val = re.match(
@@ -204,7 +276,7 @@ def process_output(output: str):
             line,
         )
         if match_val:
-            append_result(f"build/{match_val[3]}", f"{match_val[4]} time", match_val[5])
+            append_result(f"{prefix}/{match_val[3]}", f"{match_val[4]} time", match_val[5])
             prev_total = totals.get(match_val[4], 0.0)
             totals[match_val[4]] = prev_total + parse_time(match_val[5])
             continue
@@ -214,9 +286,9 @@ def process_output(output: str):
         else:
             print(line)
 
-    append_result("build/.total", "eval time", total_lean, "s")
+    append_result(f"{prefix}/.total", "eval time", total_lean, "s")
     for key, total in totals.items():
-        append_result("build/.total", f"{key} time", total, "s")
+        append_result(f"{prefix}/.total", f"{key} time", total, "s")
 
 
 def main() -> None:
@@ -237,7 +309,10 @@ def main() -> None:
         help="path the output file should be written to",
     )
     parser.add_argument(
-        "-o", "--opt", type=str, help="optimization level (O0, oct2025, or none)"
+        "-o", "--opt", type=str, help="optimization level o0 or no-opt-args)"
+    )
+    parser.add_argument(
+        "-p", "--project", type=str, help="project)"
     )
     parser.add_argument("--skip-checkout", action="store_true")
     args = parser.parse_args()
@@ -252,24 +327,44 @@ def main() -> None:
         print(f"unexpected opt level {args.opt}", file=sys.stderr)
         sys.exit(1)
 
-    if opt_level == CompileMatrixOption.O0:
-        root = "refman-o0"
-    elif opt_level == CompileMatrixOption.UNCHANGED:
-        root = "refman"
-    elif opt_level == CompileMatrixOption.NO_ARGS:
-        root = "refman-no-opt-args"
+    if args.project is None:
+        binary = "generate-manual"
+        directory = "reference-manual"
+        if opt_level == CompileMatrixOption.O0:
+            root = "refman-o0"
+        elif opt_level == CompileMatrixOption.UNCHANGED:
+            root = "refman"
+        elif opt_level == CompileMatrixOption.NO_ARGS:
+            root = "refman-no-opt-args"
+        else:
+            root = "refman-other"
+    elif args.project == "lean4cs1":
+        binary = "build-doc"
+        directory = "Lean4CS1"
+        root = "lean4cs1"
+        if opt_level == CompileMatrixOption.O0:
+            root = "lean4cs1-o0"
     else:
-        root = "refman-other"
+        print(f"unexpected project {args.project}", file=sys.stderr)
+        sys.exit(1)
 
     absolute_target = Path(os.path.abspath(args.target))
 
     if not args.skip_checkout:
-        did_checkout = checkout_reference_manual(absolute_target, opt_level)
+        if args.project is None:
+            did_checkout = checkout_reference_manual(absolute_target, opt_level)
+        else:
+            did_checkout = checkout_project(absolute_target, "https://github.com/robsimmons/Lean4CS1.git", opt_level, directory, "verso")
     else:
         did_checkout = True
 
     if did_checkout:
-        did_compile = compile_reference_manual()
+        did_build = project_build_default(directory)
+    else:
+        did_build = False
+
+    if did_build:
+        did_compile = project_build_exe(directory, binary)
     else:
         did_compile = False
 
@@ -278,17 +373,17 @@ def main() -> None:
         walk_lib_dir()
         exe_size = os.path.getsize(
             Path.cwd()
-            / "reference-manual"
+            / directory
             / ".lake"
             / "build"
             / "bin"
-            / "generate-manual"
+            / binary
         )
-        append_result("build/«generate-manual»", "generated exe", exe_size, "B")
+        append_result("build/exe", "generated exe", exe_size, "B")
         start: float = time.time()
         subprocess.run(
-            ["./.lake/build/bin/generate-manual", "--depth", "2"],
-            cwd="reference-manual/",
+            [f"./.lake/build/bin/{binary}"],
+            cwd=directory,
             check=True,
         )
         end: float = time.time()
