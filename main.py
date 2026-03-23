@@ -58,25 +58,24 @@ def append_result(
             + "\n"
         )
 
-
-def walk_ir_dir():
+def walk_ir_dir(project_directory: str):
     total_c = 0
-    ir_dir = Path.cwd() / "reference-manual" / ".lake" / "build" / "ir"
+    ir_dir = Path.cwd() / project_directory / ".lake" / "build" / "ir"
     for root, dirs, files in os.walk(ir_dir):
-        module_base = root.split("reference-manual/.lake/build/ir")[1].split("/")[1:]
+        module_base = root.split(f"{project_directory}/.lake/build/ir")[1].split("/")[1:]
         for file in files:
             if file.endswith(".c"):
                 module = ".".join(module_base + [file[:-2]])
                 size = os.path.getsize(Path(root) / file)
                 total_c += size
                 append_result(f"build/{module}", "generated C", size, "B")
-    append_result(f"build/.total", "generated C", total_c, "B")
+    append_result("build/.total", "generated C", total_c, "B")
 
-def walk_lib_dir():
+def walk_lib_dir(project_directory: str):
     total_olean = 0
-    ir_dir = Path.cwd() / "reference-manual" / ".lake" / "build" / "lib" / "lean"
+    ir_dir = Path.cwd() / project_directory / ".lake" / "build" / "lib" / "lean"
     for root, dirs, files in os.walk(ir_dir):
-        module_base = root.split("reference-manual/.lake/build/lib/lean")[1].split("/")[
+        module_base = root.split(f"{project_directory}/.lake/build/lib/lean")[1].split("/")[
             1:
         ]
         for file in files:
@@ -85,15 +84,15 @@ def walk_lib_dir():
                 size = os.path.getsize(Path(root) / file)
                 total_olean += size
                 append_result(f"build/{module}", "generated olean", size, "B")
-    append_result(f"build/.total", "generated olean", total_olean, "B")
+    append_result("build/.total", "generated olean", total_olean, "B")
 
+def checkout_project(verso_directory: Path, gitUrl: str, project_directory: str = "project", useO0: bool = False, branch: str = "main"):
+    """
+    Checkout a suitably structured Verso project in an indicated directory.
+    The project is rewritten to use the toolchain (& corresponding packages)
+    for the Verso version being benchmarked.
+    """
 
-class CompileMatrixOption(Enum):
-    O0 = 2
-    NO_ARGS = 3
-    UNCHANGED = 4
-
-def checkout_project(verso_directory: Path, gitUrl: str, optLevel: CompileMatrixOption, project_directory: str = "project", branch: str = "main"):
     try:
         with open(verso_directory / "lean-toolchain") as f:
             versos_lean_toolchain = f.read().strip()
@@ -132,7 +131,7 @@ def checkout_project(verso_directory: Path, gitUrl: str, optLevel: CompileMatrix
                 count += 1
                 if re.match(r"^require verso from ", line):
                     lines[index] = f'require verso from "{verso_directory}"'
-                elif re.match(r"^package", line):
+                elif re.match(r"^package", line) and useO0:
                     lines[index] = line + '  moreLeancArgs := #["-O0"]\n'
                 else:
                     lines[index] = line.replace(project_lean_version, verso_lean_version)
@@ -143,62 +142,6 @@ def checkout_project(verso_directory: Path, gitUrl: str, optLevel: CompileMatrix
         print(e)
         append_result("checkout", "success", 0)
         return False
-
-def checkout_reference_manual(
-    verso_directory: Path, option: CompileMatrixOption
-) -> bool:
-    try:
-        with open(verso_directory / ".reference_manual_revision") as f:
-            reference_manual_revision = "".join(
-                [line for line in f.readlines() if not line.startswith("#")]
-            ).strip()
-
-        subprocess.run(
-            [
-                "git",
-                "clone",
-                "--depth=1",
-                "https://github.com/leanprover/reference-manual.git",
-                f"--revision={reference_manual_revision}",
-            ],
-            capture_output=True,
-            check=True,
-        )
-
-        lakefile: Path = Path.cwd() / "reference-manual" / "lakefile.lean"
-        with open(lakefile) as f:
-            lines = f.readlines()
-            count = 0
-            for index, line in enumerate(lines):
-                count += 1
-                if re.match(r"^require verso from ", line):
-                    lines[index] = f'require verso from "{verso_directory}"'
-                elif re.match(r"^([\s-])+moreLeancArgs := ", line):
-                    if option == CompileMatrixOption.O0:
-                        lines[index] = '  moreLeancArgs := #["-O0"]\n'
-                    elif option == CompileMatrixOption.NO_ARGS:
-                        lines[index] = "\n"
-                    elif option == CompileMatrixOption.UNCHANGED:
-                        pass
-                    else:
-                        count -= 1
-                else:
-                    count -= 1
-            if count != 2:
-                print(
-                    f"WARNING: expected to rewrite 2 lines, rewrote {count}",
-                    file=sys.stderr,
-                )
-        with open(lakefile, "w") as f:
-            f.write("".join(lines))
-
-        append_result("checkout", "success", 1)
-        return True
-    except Exception as e:
-        print(e)
-        append_result("checkout", "success", 0)
-        return False
-
 
 def project_build_default(project_directory: str) -> bool:
     try:
@@ -257,8 +200,12 @@ def parse_time(time: str):
     print(f"cannot parse time {time}")
     raise Exception("Cannot parse time")
 
-
+total_eval_time: float = 0
+total_key_time: dict[str, float] = {}
 def process_output(prefix: str, output: str):
+    global total_eval_time
+    global total_key_time
+
     total_lean = 0.0
     totals: dict[str, float] = {}
 
@@ -287,13 +234,18 @@ def process_output(prefix: str, output: str):
             print(line)
 
     append_result(f"{prefix}/.total", "eval time", total_lean, "s")
+    total_eval_time += total_lean
     for key, total in totals.items():
+        if key not in total_key_time: total_key_time[key] = 0
+        total_key_time[key] += total
         append_result(f"{prefix}/.total", f"{key} time", total, "s")
 
 
 def main() -> None:
     global output_path
     global root
+    global total_eval_time
+    global total_key_time
     parser = argparse.ArgumentParser()
 
     # target and output are positional and defined by the Radar infrastructure
@@ -317,60 +269,48 @@ def main() -> None:
     parser.add_argument("--skip-checkout", action="store_true")
     args = parser.parse_args()
     output_path = args.output
-    # opt_level = CompileMatrixOption.UNCHANGED
-    opt_level: CompileMatrixOption = CompileMatrixOption.UNCHANGED
+    use_o0_optimization = False
     if args.opt == "o0":
-        opt_level = CompileMatrixOption.O0
-    elif args.opt == "no-opt-args":
-        opt_level = CompileMatrixOption.NO_ARGS
+        opt_level = True
     elif args.opt is not None:
         print(f"unexpected opt level {args.opt}", file=sys.stderr)
         sys.exit(1)
 
-    if args.project is None:
-        binary = "generate-manual"
-        directory = "reference-manual"
-        if opt_level == CompileMatrixOption.O0:
-            root = "refman-o0"
-        elif opt_level == CompileMatrixOption.UNCHANGED:
-            root = "refman"
-        elif opt_level == CompileMatrixOption.NO_ARGS:
-            root = "refman-no-opt-args"
-        else:
-            root = "refman-other"
-    elif args.project == "lean4cs1":
+    if args.project == "lean4cs1":
         binary = "build-doc"
         directory = "Lean4CS1"
+        git_url = "https://github.com/robsimmons/Lean4CS1.git"
+        git_branch = "verso"
         root = "lean4cs1"
-        if opt_level == CompileMatrixOption.O0:
-            root = "lean4cs1-o0"
     else:
         print(f"unexpected project {args.project}", file=sys.stderr)
         sys.exit(1)
 
+    if use_o0_optimization:
+        root += "-o0"
+
     absolute_target = Path(os.path.abspath(args.target))
 
     if not args.skip_checkout:
-        if args.project is None:
-            did_checkout = checkout_reference_manual(absolute_target, opt_level)
-        else:
-            did_checkout = checkout_project(absolute_target, "https://github.com/robsimmons/Lean4CS1.git", opt_level, directory, "verso")
+        did_checkout = checkout_project(absolute_target, git_url, branch = git_branch, useO0 = use_o0_optimization)
     else:
         did_checkout = True
 
     if did_checkout:
         did_build = project_build_default(directory)
     else:
+        print("build step did not succeed")
         did_build = False
 
     if did_build:
+        print("exe build step did not succeed")
         did_compile = project_build_exe(directory, binary)
     else:
         did_compile = False
 
     if did_compile:
-        walk_ir_dir()
-        walk_lib_dir()
+        walk_ir_dir(directory)
+        walk_lib_dir(directory)
         exe_size = os.path.getsize(
             Path.cwd()
             / directory
@@ -389,13 +329,13 @@ def main() -> None:
         end: float = time.time()
         append_result("execute", "generation time", end - start, "s")
 
+        append_result("build/.total", "eval time", total_eval_time, "s")
+        for key, total in total_key_time.items():
+            append_result("build/.total", f"{key} time", total, "s")
+
     else:
         print("signaling failure exit")
         sys.exit(1)
-
-    # locs = collect_locs(args.target)
-    # count_and_output_locs(args.output, Path(), locs)
-
 
 if __name__ == "__main__":
     main()
