@@ -145,7 +145,7 @@ def checkout_project(
             for index, line in enumerate(lines):
                 count += 1
                 if re.match(r"^require verso from ", line):
-                    lines[index] = f'require verso from "{verso_directory}"'
+                    lines[index] = f'require verso from "{verso_directory}"\n'
                 elif re.match(r"^package", line) and useO0:
                     lines[index] = line + '  moreLeancArgs := #["-O0"]\n'
                 else:
@@ -154,6 +154,7 @@ def checkout_project(
                     )
         with open(lakefile, "w") as f:
             f.write("".join(lines))
+        append_result("checkout", "success", 1)
         return True
     except Exception as e:
         print(e)
