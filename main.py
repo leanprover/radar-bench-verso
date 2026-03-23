@@ -132,10 +132,10 @@ def checkout_project(verso_directory: Path, gitUrl: str, optLevel: CompileMatrix
                 count += 1
                 if re.match(r"^require verso from ", line):
                     lines[index] = f'require verso from "{verso_directory}"'
+                elif re.match(r"^package", line):
+                    lines[index] = line + '  moreLeancArgs := #["-O0"]\n'
                 else:
                     lines[index] = line.replace(project_lean_version, verso_lean_version)
-        if optLevel == CompileMatrixOption.O0:
-            lines += ['\nmoreLeancArgs := #["-O0"]']
         with open(lakefile, "w") as f:
             f.write("".join(lines))
         return True
