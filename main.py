@@ -301,7 +301,7 @@ def main() -> None:
     output_path = args.output
     use_o0_optimization = False
     if args.opt == "o0":
-        opt_level = True
+        use_o0_optimization = True
     elif args.opt is not None:
         print(f"unexpected opt level {args.opt}", file=sys.stderr)
         sys.exit(1)
