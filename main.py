@@ -228,45 +228,52 @@ def parse_time(time: str):
     raise Exception("Cannot parse time")
 
 
-total_eval_time: float = 0
 total_key_time: dict[str, float] = {}
-
+subtotals_key_time: dict[str, dict[str, float]] = {}
 
 def process_output(prefix: str, output: str):
-    global total_eval_time
     global total_key_time
+    global subtotals_key_time
 
-    total_lean = 0.0
     totals: dict[str, float] = {}
 
     for line in output.split("\n"):
-        match_val = re.match(
+        match_val_eval_metric = re.match(
             r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.\-/_«»]+) \(([A-Za-z0-9.]+)\)$",
             line,
         )
-        if match_val:
-            append_result(f"{prefix}/{match_val[3]}", "eval time", match_val[4])
-            total_lean += parse_time(match_val[4])
-            continue
-        match_val = re.match(
+        match_val_other_metric = re.match(
             r"^. \[([0-9]+)/([0-9]+)\] Built ([A-Za-z0-9.\-/_«»]+):([A-Za-z0-9.\-/_«»]+) \(([A-Za-z0-9.]+)\)$",
             line,
         )
-        if match_val:
-            append_result(
-                f"{prefix}/{match_val[3]}", f"{match_val[4]} time", match_val[5]
-            )
-            prev_total = totals.get(match_val[4], 0.0)
-            totals[match_val[4]] = prev_total + parse_time(match_val[5])
-            continue
-        match_val = re.match(r"[^]]*\]\s*Built", line)
-        if match_val:
+
+        if match_val_eval_metric:
+            metric: str = "eval"
+            time_data: float = parse_time(match_val_eval_metric[4])
+            top_level_module: str = match_val_eval_metric[3].split(".")[0]
+        elif match_val_other_metric:
+            metric = match_val_other_metric[4]
+            time_data = parse_time(match_val_other_metric[5])
+            top_level_module = match_val_other_metric[3].split(".")[0]
+        elif re.match(r"[^]]*\]\s*Built", line):
             print(f"MISSED?: {line}", file=sys.stderr)
+            continue   
         else:
             print(line)
+            continue
 
-    append_result(f"{prefix}/.total", "eval time", total_lean, "s")
-    total_eval_time += total_lean
+        print(line)
+
+        # Update total
+        prev_total = totals.get(metric, 0.0)
+        totals[metric] = prev_total + time_data
+
+        # Update per-package subtotal
+        if top_level_module not in subtotals_key_time:
+            subtotals_key_time[top_level_module] = {}
+        prev_subtotal = subtotals_key_time[top_level_module].get(metric, 0.0)
+        subtotals_key_time[top_level_module][metric] = prev_subtotal + time_data
+
     for key, total in totals.items():
         if key not in total_key_time:
             total_key_time[key] = 0
@@ -277,8 +284,8 @@ def process_output(prefix: str, output: str):
 def main() -> None:
     global output_path
     global root
-    global total_eval_time
     global total_key_time
+    global subtotals_key_time
     parser = argparse.ArgumentParser()
 
     # target and output are positional and defined by the Radar infrastructure
@@ -336,13 +343,13 @@ def main() -> None:
     if did_checkout:
         did_build = project_build_default(directory)
     else:
-        print("build step did not succeed")
+        print("default build step did not succeed")
         did_build = False
 
     if did_build:
-        print("exe build step did not succeed")
         did_compile = project_build_exe(directory, binary)
     else:
+        print("exe build step did not succeed")
         did_compile = False
 
     if did_compile:
@@ -361,9 +368,11 @@ def main() -> None:
         end: float = time.time()
         append_result("execute", "generation time", end - start, "s")
 
-        append_result("build/.total", "eval time", total_eval_time, "s")
         for key, total in total_key_time.items():
             append_result("build/.total", f"{key} time", total, "s")
+        for top_level_package, kv in subtotals_key_time.items():
+            for key, total in kv.items():
+                append_result(f"build/{top_level_package}/.total", f"{key} time", total, "s")
 
     else:
         print("signaling failure exit")
