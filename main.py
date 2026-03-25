@@ -324,7 +324,7 @@ def main() -> None:
         git_url = "https://github.com/robsimmons/Lean4CS1.git"
         git_branch = "verso"
         root = "lean4cs1"
-    if args.project == "sherlock":
+    elif args.project == "sherlock":
         binary = "sherlock"
         directory = "sherlock"
         git_url = "https://github.com/robsimmons/sherlock-lean.git"
