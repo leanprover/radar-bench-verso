@@ -231,6 +231,7 @@ def parse_time(time: str):
 total_key_time: dict[str, float] = {}
 subtotals_key_time: dict[str, dict[str, float]] = {}
 
+
 def process_output(prefix: str, output: str):
     global total_key_time
     global subtotals_key_time
@@ -250,18 +251,21 @@ def process_output(prefix: str, output: str):
         if match_val_eval_metric:
             metric: str = "eval"
             time_data: float = parse_time(match_val_eval_metric[4])
+            module_name = match_val_eval_metric[3]
             top_level_module: str = match_val_eval_metric[3].split(".")[0]
         elif match_val_other_metric:
             metric = match_val_other_metric[4]
             time_data = parse_time(match_val_other_metric[5])
+            module_name = match_val_other_metric[3]
             top_level_module = match_val_other_metric[3].split(".")[0]
         elif re.match(r"[^]]*\]\s*Built", line):
             print(f"MISSED?: {line}", file=sys.stderr)
-            continue   
+            continue
         else:
             print(line)
             continue
 
+        append_result(f"{prefix}/{module_name}", f"{metric} time", time_data)
         print(line)
 
         # Update total
@@ -320,6 +324,12 @@ def main() -> None:
         git_url = "https://github.com/robsimmons/Lean4CS1.git"
         git_branch = "verso"
         root = "lean4cs1"
+    if args.project == "sherlock":
+        binary = "sherlock"
+        directory = "sherlock"
+        git_url = "https://github.com/robsimmons/sherlock-lean.git"
+        git_branch = "lean"
+        root = "sherlock"
     else:
         print(f"unexpected project {args.project}", file=sys.stderr)
         sys.exit(1)
@@ -372,7 +382,9 @@ def main() -> None:
             append_result("build/.total", f"{key} time", total, "s")
         for top_level_package, kv in subtotals_key_time.items():
             for key, total in kv.items():
-                append_result(f"build/{top_level_package}/.total", f"{key} time", total, "s")
+                append_result(
+                    f"build/{top_level_package}/.total", f"{key} time", total, "s"
+                )
 
     else:
         print("signaling failure exit")
