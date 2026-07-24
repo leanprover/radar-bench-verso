@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 
-import os.path
 import argparse
 import json
-import subprocess
-from pathlib import Path
+import os.path
 import re
-from enum import Enum
-import time
+import subprocess
 import sys
+import time
+from pathlib import Path
 from typing import Any
 
 output_path: Path
 root: str
+cmdargs: list[str]
 
 
 def append_result(
@@ -290,6 +290,7 @@ def main() -> None:
     global root
     global total_key_time
     global subtotals_key_time
+    global cmdargs
     parser = argparse.ArgumentParser()
 
     # target and output are positional and defined by the Radar infrastructure
@@ -324,12 +325,21 @@ def main() -> None:
         git_url = "https://github.com/robsimmons/Lean4CS1.git"
         git_branch = "verso"
         root = "lean4cs1"
+        cmdargs = []
     elif args.project == "sherlock":
         binary = "sherlock"
         directory = "sherlock"
         git_url = "https://github.com/robsimmons/sherlock-lean.git"
         git_branch = "lean"
         root = "sherlock"
+        cmdargs = []
+    elif args.project == "refman":
+        binary = "generate-manual"
+        directory = "refman"
+        git_url = "https://github.com/leanprover/reference-manual.git"
+        git_branch = "main"
+        root = "refman"
+        cmdargs = ["--depth", "2", "--delay-html-multi", "multi.json"]
     else:
         print(f"unexpected project {args.project}", file=sys.stderr)
         sys.exit(1)
@@ -371,7 +381,7 @@ def main() -> None:
         append_result("build/exe", "generated exe", exe_size, "B")
         start: float = time.time()
         subprocess.run(
-            [f"./.lake/build/bin/{binary}"],
+            [f"./.lake/build/bin/{binary}"] + cmdargs,
             cwd=directory,
             check=True,
         )
