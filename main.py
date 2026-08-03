@@ -220,7 +220,7 @@ def parse_time(time: str):
     time = time.strip()
     match_val = re.match(r"([0-9.]+)ms$", time)
     if match_val:
-        return float(match_val[1]) / 100
+        return float(match_val[1]) / 1000
     match_val = re.match(r"([0-9.]+)s$", time)
     if match_val:
         return float(match_val[1])
@@ -265,7 +265,7 @@ def process_output(prefix: str, output: str):
             print(line)
             continue
 
-        append_result(f"{prefix}/{module_name}", f"{metric} time", time_data)
+        append_result(f"{prefix}/{module_name}", f"{metric} time", time_data, "s")
         print(line)
 
         # Update total
