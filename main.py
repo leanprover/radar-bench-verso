@@ -33,13 +33,9 @@ def append_result(
             val = str(float(match_val[1]) / 1000)
             unit = "s"
 
-        match_val = re.match(r"([0-9.]+)%", val)
-        if match_val:
-            val = match_val[1]
-            unit = "%"
-
+    if unit is None:
         # Supported: s for sec, B for bytes
-        match_val = re.match(r"([0-9.]+)([a-zA-Z]+)", val)
+        match_val = re.match(r"([0-9.]+)([%a-zA-Z]+)", val)
         if match_val:
             val = match_val[1]
             unit = match_val[2]
@@ -108,7 +104,7 @@ def checkout_project(
         with open(verso_directory / "lean-toolchain") as f:
             versos_lean_toolchain = f.read().strip()
             if not versos_lean_toolchain.startswith("leanprover/lean4:"):
-                print(
+                raise Exception(
                     f"lean toolchain for verso isn't a lean4 version: {versos_lean_toolchain}"
                 )
             verso_lean_version = versos_lean_toolchain[17:]
@@ -130,8 +126,8 @@ def checkout_project(
         # we can use it to rewrite the lakefile
         with open(Path.cwd() / project_directory / "lean-toolchain") as f:
             project_lean_toolchain = f.read().strip()
-            if not versos_lean_toolchain.startswith("leanprover/lean4:"):
-                print(
+            if not project_lean_toolchain.startswith("leanprover/lean4:"):
+                raise Exception(
                     f"lean toolchain for project isn't a lean4 version: {project_lean_toolchain}"
                 )
             project_lean_version = project_lean_toolchain[17:]
@@ -141,9 +137,7 @@ def checkout_project(
         lakefile: Path = Path.cwd() / project_directory / "lakefile.lean"
         with open(lakefile) as f:
             lines = f.readlines()
-            count = 0
             for index, line in enumerate(lines):
-                count += 1
                 if re.match(r"^require verso from ", line):
                     lines[index] = f'require verso from "{verso_directory}"\n'
                 elif re.match(r"^package", line) and useO0:
@@ -195,7 +189,6 @@ def project_build_default(project_directory: str) -> bool:
 
 def project_build_exe(project_directory: str, name: str) -> bool:
     try:
-        subprocess.run
         start: float = time.time()
         result = subprocess.run(
             ["lake", "build", name, "--no-ansi", "--keep-toolchain"],
@@ -284,6 +277,8 @@ def process_output(prefix: str, output: str):
         total_key_time[key] += total
         append_result(f"{prefix}/.total", f"{key} time", total, "s")
 
+# TODO if verso checkout contains bench/, use that
+# TODO add TODO to remove bench code here
 
 def main() -> None:
     global output_path
@@ -306,9 +301,9 @@ def main() -> None:
         help="path the output file should be written to",
     )
     parser.add_argument(
-        "-o", "--opt", type=str, help="optimization level o0 or no-opt-args)"
+        "-o", "--opt", type=str, help="optimization level o0 or no-opt-args"
     )
-    parser.add_argument("-p", "--project", type=str, help="project)")
+    parser.add_argument("-p", "--project", type=str, help="project")
     parser.add_argument("--skip-checkout", action="store_true")
     args = parser.parse_args()
     output_path = args.output
@@ -360,45 +355,42 @@ def main() -> None:
     else:
         did_checkout = True
 
-    if did_checkout:
-        did_build = project_build_default(directory)
-    else:
-        print("default build step did not succeed")
-        did_build = False
-
-    if did_build:
-        did_compile = project_build_exe(directory, binary)
-    else:
-        print("exe build step did not succeed")
-        did_compile = False
-
-    if did_compile:
-        walk_ir_dir(directory)
-        walk_lib_dir(directory)
-        exe_size = os.path.getsize(
-            Path.cwd() / directory / ".lake" / "build" / "bin" / binary
-        )
-        append_result("build/exe", "generated exe", exe_size, "B")
-        start: float = time.time()
-        subprocess.run(
-            [f"./.lake/build/bin/{binary}"] + cmdargs,
-            cwd=directory,
-            check=True,
-        )
-        end: float = time.time()
-        append_result("execute", "generation time", end - start, "s")
-
-        for key, total in total_key_time.items():
-            append_result("build/.total", f"{key} time", total, "s")
-        for top_level_package, kv in subtotals_key_time.items():
-            for key, total in kv.items():
-                append_result(
-                    f"build/{top_level_package}/.total", f"{key} time", total, "s"
-                )
-
-    else:
-        print("signaling failure exit")
+    if not did_checkout:
+        print("checkout did not succeed")
         sys.exit(1)
+
+    did_build = project_build_default(directory)
+    if not did_build:
+        print("default build step did not succeed")
+        sys.exit(1)
+
+    did_compile = project_build_exe(directory, binary)
+    if not did_compile:
+        print("exe build step did not succeed")
+        sys.exit(1)
+
+    walk_ir_dir(directory)
+    walk_lib_dir(directory)
+    exe_size = os.path.getsize(
+        Path.cwd() / directory / ".lake" / "build" / "bin" / binary
+    )
+    append_result("build/exe", "generated exe", exe_size, "B")
+    start: float = time.time()
+    subprocess.run(
+        [f"./.lake/build/bin/{binary}"] + cmdargs,
+        cwd=directory,
+        check=True,
+    )
+    end: float = time.time()
+    append_result("execute", "generation time", end - start, "s")
+
+    for key, total in total_key_time.items():
+        append_result("build/.total", f"{key} time", total, "s")
+    for top_level_package, kv in subtotals_key_time.items():
+        for key, total in kv.items():
+            append_result(
+                f"build/{top_level_package}/.total", f"{key} time", total, "s"
+            )
 
 
 if __name__ == "__main__":
