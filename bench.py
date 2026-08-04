@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+# This script is invoked by Radar infrastructure
+# to measure the build time of projects downstream of Verso.
+# We prefer the version of this script in verso/bench.py,
+# but this copy can be used to benchmark old versions that don't include it.
 
 import argparse
 import json
@@ -55,33 +59,29 @@ def append_result(
         )
 
 
-def walk_ir_dir(project_directory: str):
+def walk_ir_dir(project_directory: Path):
     total_c = 0
     ir_dir = Path.cwd() / project_directory / ".lake" / "build" / "ir"
-    for root, dirs, files in os.walk(ir_dir):
-        module_base = root.split(f"{project_directory}/.lake/build/ir")[1].split("/")[
-            1:
-        ]
+    for dir_, _, files in os.walk(ir_dir):
+        module_base = list(Path(dir_).relative_to(ir_dir).parts)
         for file in files:
             if file.endswith(".c"):
                 module = ".".join(module_base + [file[:-2]])
-                size = os.path.getsize(Path(root) / file)
+                size = os.path.getsize(Path(dir_) / file)
                 total_c += size
                 append_result(f"build/{module}", "generated C", size, "B")
     append_result("build/.total", "generated C", total_c, "B")
 
 
-def walk_lib_dir(project_directory: str):
+def walk_lib_dir(project_directory: Path):
     total_olean = 0
-    ir_dir = Path.cwd() / project_directory / ".lake" / "build" / "lib" / "lean"
-    for root, dirs, files in os.walk(ir_dir):
-        module_base = root.split(f"{project_directory}/.lake/build/lib/lean")[1].split(
-            "/"
-        )[1:]
+    lib_dir = Path.cwd() / project_directory / ".lake" / "build" / "lib" / "lean"
+    for dir_, _, files in os.walk(lib_dir):
+        module_base = list(Path(dir_).relative_to(lib_dir).parts)
         for file in files:
             if file.endswith(".olean"):
                 module = ".".join(module_base + [file[:-6]])
-                size = os.path.getsize(Path(root) / file)
+                size = os.path.getsize(Path(dir_) / file)
                 total_olean += size
                 append_result(f"build/{module}", "generated olean", size, "B")
     append_result("build/.total", "generated olean", total_olean, "B")
@@ -90,9 +90,9 @@ def walk_lib_dir(project_directory: str):
 def checkout_project(
     verso_directory: Path,
     gitUrl: str,
-    project_directory: str = "project",
-    useO0: bool = False,
-    branch: str = "main",
+    project_directory: Path,
+    useO0: bool,
+    branch: str,
 ):
     """
     Checkout a suitably structured Verso project in an indicated directory.
@@ -144,19 +144,19 @@ def checkout_project(
                     lines[index] = line + '  moreLeancArgs := #["-O0"]\n'
                 else:
                     lines[index] = line.replace(
-                        project_lean_version, verso_lean_version
+                        f'"{project_lean_version}"', f'"{verso_lean_version}"'
                     )
         with open(lakefile, "w") as f:
             f.write("".join(lines))
-        append_result("checkout", "success", 1)
+        append_result("checkout", "success", 1, more_is_better=True)
         return True
     except Exception as e:
         print(e)
-        append_result("checkout", "success", 0)
+        append_result("checkout", "success", 0, more_is_better=True)
         return False
 
 
-def project_build_default(project_directory: str) -> bool:
+def project_build_default(project_directory: Path) -> bool:
     try:
         subprocess.run(
             ["lake", "update", "--no-ansi", "--keep-toolchain"],
@@ -175,19 +175,19 @@ def project_build_default(project_directory: str) -> bool:
         process_output("build/default", result.stdout.decode("utf-8"))
         print(result.stderr.decode("utf-8"), file=sys.stderr)
         result.check_returncode()
-        append_result("build/default", "success", 1)
+        append_result("build/default", "success", 1, more_is_better=True)
         return True
     except subprocess.SubprocessError as e:
         print(f"compilation failed {e}")
-        append_result("build/default", "success", 0)
+        append_result("build/default", "success", 0, more_is_better=True)
         return False
     except Exception as e:
         print(f"unexpected error {e}")
-        append_result("build/default", "success", 0)
+        append_result("build/default", "success", 0, more_is_better=True)
         return False
 
 
-def project_build_exe(project_directory: str, name: str) -> bool:
+def project_build_exe(project_directory: Path, name: str) -> bool:
     try:
         start: float = time.time()
         result = subprocess.run(
@@ -201,13 +201,32 @@ def project_build_exe(project_directory: str, name: str) -> bool:
         process_output("build/exe", result.stdout.decode("utf-8"))
         print(result.stderr.decode("utf-8"), file=sys.stderr)
         result.check_returncode()
-        append_result("build/exe", "success", 1)
+        append_result("build/exe", "success", 1, more_is_better=True)
         return True
     except Exception as e:
         print(f"unexpected error {e}")
-        append_result("build/exe", "success", 0)
+        append_result("build/exe", "success", 0, more_is_better=True)
         return False
 
+def project_run_exe(project_directory: Path, exe_name: str) -> bool:
+    try:
+        exe_path = Path.cwd() / project_directory / ".lake" / "build" / "bin" / exe_name
+        exe_size = os.path.getsize(exe_path)
+        append_result("build/exe", "generated exe", exe_size, "B")
+        start: float = time.time()
+        subprocess.run(
+            [str(exe_path)] + cmdargs,
+            cwd=project_directory,
+            check=True,
+        )
+        end: float = time.time()
+        append_result("execute", "generation time", end - start, "s")
+        append_result("execute", "success", 1, more_is_better=True)
+        return True
+    except Exception as e:
+        print(f"unexpected error {e}")
+        append_result("execute", "success", 0, more_is_better=True)
+        return False
 
 def parse_time(time: str):
     time = time.strip()
@@ -277,8 +296,6 @@ def process_output(prefix: str, output: str):
         total_key_time[key] += total
         append_result(f"{prefix}/.total", f"{key} time", total, "s")
 
-# TODO if verso checkout contains bench/, use that
-# TODO add TODO to remove bench code here
 
 def main() -> None:
     global output_path
@@ -286,69 +303,59 @@ def main() -> None:
     global total_key_time
     global subtotals_key_time
     global cmdargs
-    parser = argparse.ArgumentParser()
 
-    # target and output are positional and defined by the Radar infrastructure
-    # it just needs to be executable and it needs to take two arguments
+    parser = argparse.ArgumentParser(
+        description="Collect timing and output size data from building a Verso project and generating its artifacts. "
+          "Output in Radar format."
+    )
+
     parser.add_argument(
-        "target",
+        "output_path",
         type=Path,
-        help="path to the Verso repo to be benchmarked",
+        help="file the measurements should be appended to (created if missing)",
     )
-    parser.add_argument(
-        "output",
-        type=Path,
-        help="path the output file should be written to",
-    )
-    parser.add_argument(
-        "-o", "--opt", type=str, help="optimization level o0 or no-opt-args"
-    )
-    parser.add_argument("-p", "--project", type=str, help="project")
-    parser.add_argument("--skip-checkout", action="store_true")
+    parser.add_argument("-r", "--metrics-root", type=str, help="first component of reported Radar metric names", required=True)
+    parser.add_argument("-e", "--exe-name", type=str, help="name of the Verso doc generator lean_exe", required=True)
+    parser.add_argument("--exe-arg", action="append", help="additional argument to pass to the doc generator (use --exe-arg=--foo syntax)", default=[])
+    parser.add_argument("--opt", type=str, help="optimization level for native compilation (must be o0 if provided)")
+    parser.add_argument("--project-url", type=str, help="Git URL of the project to benchmark")
+    parser.add_argument("--project-branch", type=str, help="branch of the project to clone")
+    parser.add_argument("--project-dir", type=Path, help="directory to clone the project into (or to read the project from with --skip-checkout)", default="project")
+    parser.add_argument("--skip-checkout", action="store_true", help="do not clone the project, assuming it is already in --project-dir")
+    parser.add_argument("--verso-dir", type=Path, help="Verso checkout directory")
+    
     args = parser.parse_args()
-    output_path = args.output
-    use_o0_optimization = False
+
+    output_path = args.output_path
+    directory = args.project_dir
+    root = args.metrics_root
+    binary = args.exe_name
+    cmdargs = args.exe_arg
+    if args.verso_dir is not None:
+        verso_directory = args.verso_dir
+    else:
+        verso_directory = Path(__file__).resolve().parent
+
     if args.opt == "o0":
         use_o0_optimization = True
     elif args.opt is not None:
         print(f"unexpected opt level {args.opt}", file=sys.stderr)
         sys.exit(1)
-
-    if args.project == "lean4cs1":
-        binary = "build-doc"
-        directory = "lean4-cs1"
-        git_url = "https://github.com/robsimmons/Lean4CS1.git"
-        git_branch = "verso"
-        root = "lean4cs1"
-        cmdargs = []
-    elif args.project == "sherlock":
-        binary = "sherlock"
-        directory = "sherlock"
-        git_url = "https://github.com/robsimmons/sherlock-lean.git"
-        git_branch = "lean"
-        root = "sherlock"
-        cmdargs = []
-    elif args.project == "refman":
-        binary = "generate-manual"
-        directory = "refman"
-        git_url = "https://github.com/leanprover/reference-manual.git"
-        git_branch = "main"
-        root = "refman"
-        cmdargs = ["--depth", "2", "--delay-html-multi", "multi.json"]
     else:
-        print(f"unexpected project {args.project}", file=sys.stderr)
-        sys.exit(1)
-
-    if use_o0_optimization:
-        root += "-o0"
-
-    absolute_target = Path(os.path.abspath(args.target))
+        use_o0_optimization = False
 
     if not args.skip_checkout:
+        if args.project_url is None:
+            print(f"--project-url must be provided when not using --skip-checkout", file=sys.stderr)
+            sys.exit(1)
+        if args.project_branch is None:
+            print(f"--project-branch must be provided when not using --skip-checkout", file=sys.stderr)
+            sys.exit(1)
+
         did_checkout = checkout_project(
-            absolute_target,
-            git_url,
-            branch=git_branch,
+            verso_directory=verso_directory,
+            gitUrl=args.project_url,
+            branch=args.project_branch,
             useO0=use_o0_optimization,
             project_directory=directory,
         )
@@ -358,6 +365,14 @@ def main() -> None:
     if not did_checkout:
         print("checkout did not succeed")
         sys.exit(1)
+
+    # Clean in case the script had already run on a different downstream project
+    # and constructed `.lake` in the Verso directory.
+    subprocess.run(
+        ["lake", "clean", "--no-ansi", "--keep-toolchain"],
+        cwd=verso_directory,
+        check=True,
+    )
 
     did_build = project_build_default(directory)
     if not did_build:
@@ -371,18 +386,6 @@ def main() -> None:
 
     walk_ir_dir(directory)
     walk_lib_dir(directory)
-    exe_size = os.path.getsize(
-        Path.cwd() / directory / ".lake" / "build" / "bin" / binary
-    )
-    append_result("build/exe", "generated exe", exe_size, "B")
-    start: float = time.time()
-    subprocess.run(
-        [f"./.lake/build/bin/{binary}"] + cmdargs,
-        cwd=directory,
-        check=True,
-    )
-    end: float = time.time()
-    append_result("execute", "generation time", end - start, "s")
 
     for key, total in total_key_time.items():
         append_result("build/.total", f"{key} time", total, "s")
@@ -392,6 +395,10 @@ def main() -> None:
                 f"build/{top_level_package}/.total", f"{key} time", total, "s"
             )
 
+    did_run = project_run_exe(directory, binary)
+    if not did_run:
+        print("exe run step did not succeed")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
