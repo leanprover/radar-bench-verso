@@ -1,3 +1,9 @@
 #!/usr/bin/env bash
 
-python3 main.py --project lean4cs1 --opt o0 "$@"
+python3 main.py "$@" -- \
+    --metrics-root lean4cs1-o0 \
+    --exe-name build-doc \
+    --project-url https://github.com/robsimmons/Lean4CS1.git \
+    --project-branch verso \
+    --project-dir lean4-cs1 \
+    --opt o0

@@ -1,3 +1,9 @@
 #!/usr/bin/env bash
 
-python3 main.py --project sherlock --opt o0 "$@"
+python3 main.py "$@" -- \
+    --metrics-root sherlock-o0 \
+    --exe-name sherlock \
+    --project-url https://github.com/robsimmons/sherlock-lean.git \
+    --project-branch lean \
+    --project-dir sherlock \
+    --opt o0
