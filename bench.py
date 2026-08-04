@@ -208,7 +208,7 @@ def project_build_exe(project_directory: Path, name: str) -> bool:
         append_result("build/exe", "success", 0, more_is_better=True)
         return False
 
-def project_run_exe(project_directory: Path, exe_name: str) -> bool:
+def project_measure_exe(project_directory: Path, exe_name: str) -> bool:
     try:
         exe_path = Path.cwd() / project_directory / ".lake" / "build" / "bin" / exe_name
         exe_size = os.path.getsize(exe_path)
@@ -395,9 +395,9 @@ def main() -> None:
                 f"build/{top_level_package}/.total", f"{key} time", total, "s"
             )
 
-    did_run = project_run_exe(directory, binary)
+    did_run = project_measure_exe(directory, binary)
     if not did_run:
-        print("exe run step did not succeed")
+        print("exe measure step did not succeed")
         sys.exit(1)
 
 if __name__ == "__main__":
