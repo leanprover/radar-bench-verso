@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-timeout 30m python3 main.py "$@" -- \
+timeout -s KILL 30m python3 main.py "$@" -- \
     --metrics-root sherlock-o0 \
     --exe-name sherlock \
     --project-url https://github.com/robsimmons/sherlock-lean.git \
