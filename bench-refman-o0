@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 
 # NB: refman already passes -O0, so we do not pass --opt.
-python3 main.py "$@" -- \
-    --metrics-root refman \
-    --exe-name generate-manual \
-    --project-url https://github.com/leanprover/reference-manual.git \
-    --project-branch main \
-    --project-dir refman \
-    --exe-arg=--depth \
-    --exe-arg=2 \
-    --exe-arg=--delay-html-multi \
-    --exe-arg=multi.json
+#python3 main.py "$@" -- \
+#    --metrics-root refman \
+#    --exe-name generate-manual \
+#    --project-url https://github.com/leanprover/reference-manual.git \
+#    --project-branch main \
+#    --project-dir refman \
+#    --exe-arg=--depth \
+#    --exe-arg=2 \
+#    --exe-arg=--delay-html-multi \
+#    --exe-arg=multi.json
