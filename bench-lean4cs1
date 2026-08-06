@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-python3 main.py "$@" -- \
+timeout 30m python3 main.py "$@" -- \
     --metrics-root lean4cs1 \
     --exe-name build-doc \
     --project-url https://github.com/robsimmons/Lean4CS1.git \
