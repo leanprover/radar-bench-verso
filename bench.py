@@ -160,7 +160,7 @@ def checkout_project(
         return False
 
 
-def project_build_default(project_directory: Path) -> bool:
+def project_build_default(project_directory: Path) -> float | None:
     try:
         subprocess.run(
             ["lake", "update", "--no-ansi", "--keep-toolchain"],
@@ -174,24 +174,25 @@ def project_build_default(project_directory: Path) -> bool:
             capture_output=True,
         )
         end: float = time.time()
-        print(end - start)
-        append_result("build/default/.total", "wall clock time", end - start, "s")
+        dt = end - start
+        print(dt)
+        append_result("build/default/.total", "wall clock time", dt, "s")
         process_output("build/default", result.stdout.decode("utf-8"))
         print(result.stderr.decode("utf-8"), file=sys.stderr)
         result.check_returncode()
         append_result("build/default", "success", 1, more_is_better=True)
-        return True
+        return dt
     except subprocess.SubprocessError as e:
         print(f"compilation failed {e}")
         append_result("build/default", "success", 0, more_is_better=True)
-        return False
+        return None
     except Exception as e:
         print(f"unexpected error {e}")
         append_result("build/default", "success", 0, more_is_better=True)
-        return False
+        return None
 
 
-def project_build_exe(project_directory: Path, name: str) -> bool:
+def project_build_exe(project_directory: Path, name: str) -> float | None:
     try:
         start: float = time.time()
         result = subprocess.run(
@@ -200,17 +201,18 @@ def project_build_exe(project_directory: Path, name: str) -> bool:
             capture_output=True,
         )
         end: float = time.time()
-        print(end - start)
-        append_result("build/exe/.total", "wall clock time", end - start, "s")
+        dt = end - start
+        print(dt)
+        append_result("build/exe/.total", "wall clock time", dt, "s")
         process_output("build/exe", result.stdout.decode("utf-8"))
         print(result.stderr.decode("utf-8"), file=sys.stderr)
         result.check_returncode()
         append_result("build/exe", "success", 1, more_is_better=True)
-        return True
+        return dt
     except Exception as e:
         print(f"unexpected error {e}")
         append_result("build/exe", "success", 0, more_is_better=True)
-        return False
+        return None
 
 def project_measure_exe(project_directory: Path, exe_name: str) -> bool:
     try:
@@ -382,15 +384,17 @@ def main() -> None:
     if not args.pre_build_cmd is None:
         subprocess.run([args.pre_build_cmd], cwd=directory, check=True)
 
-    did_build = project_build_default(directory)
-    if not did_build:
+    default_time = project_build_default(directory)
+    if default_time is None:
         print("default build step did not succeed")
         sys.exit(1)
 
-    did_compile = project_build_exe(directory, binary)
-    if not did_compile:
+    exe_time = project_build_exe(directory, binary)
+    if exe_time is None:
         print("exe build step did not succeed")
         sys.exit(1)
+
+    append_result("build/.total", "wall clock time", default_time + exe_time, "s")
 
     walk_ir_dir(directory)
     walk_lib_dir(directory)
