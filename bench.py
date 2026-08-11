@@ -323,6 +323,7 @@ def main() -> None:
     parser.add_argument("--project-dir", type=Path, help="directory to clone the project into (or to read the project from with --skip-checkout)", default="project")
     parser.add_argument("--skip-checkout", action="store_true", help="do not clone the project, assuming it is already in --project-dir")
     parser.add_argument("--verso-dir", type=Path, help="Verso checkout directory")
+    parser.add_argument("--pre-build-cmd", type=str, help="additional command to run in the project directory after `lake update`, before `lake build`; its time is not measured", default=[])
     
     args = parser.parse_args()
 
@@ -373,6 +374,9 @@ def main() -> None:
         cwd=verso_directory,
         check=True,
     )
+
+    if not args.pre_build_cmd is None:
+        subprocess.run([args.pre_build_cmd], cwd=directory, check=True)
 
     did_build = project_build_default(directory)
     if not did_build:
