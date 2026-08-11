@@ -1,8 +1,12 @@
 #!/usr/bin/env python
 # This script is invoked by Radar infrastructure
 # to measure the build time of projects downstream of Verso.
-# We prefer the version of this script in verso/bench.py,
-# but this copy can be used to benchmark old versions that don't include it.
+#
+# If a version of this script exists in verso/bench.py,
+# we run that one instead.
+# This allows Verso's git history to track changes to the build process
+# together with changes to how Radar should measure it.
+# This copy is used to benchmark Verso revisions missing bench.py.
 
 import argparse
 import json
