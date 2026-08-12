@@ -16,7 +16,6 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any
 
 output_path: Path
 root: str
@@ -28,7 +27,7 @@ def append_result(
     submetric: str,
     value: str | float | int,
     unit=None,
-    more_is_better: Any = False,
+    more_is_better: bool = False,
 ) -> None:
     global output_path
     global root
@@ -97,7 +96,7 @@ def checkout_project(
     project_directory: Path,
     useO0: bool,
     branch: str,
-):
+) -> tuple[bool, bool]:
     """
     Checkout a suitably structured Verso project in an indicated directory.
     The project is rewritten to use the toolchain (& corresponding packages)
@@ -139,34 +138,59 @@ def checkout_project(
             f.write(versos_lean_toolchain)
 
         lakefile: Path = Path.cwd() / project_directory / "lakefile.lean"
+        needs_mathlib_cache_get = False
         with open(lakefile) as f:
             lines = f.readlines()
             for index, line in enumerate(lines):
                 if re.match(r"^require verso from ", line):
                     lines[index] = f'require verso from "{verso_directory}"\n'
+                elif re.match(r"^require mathlib from ", line) and "nightly" in verso_lean_version:
+                    # Mathlib nightly-testing-* tags live in a different repository - switch to that one.
+                    # Remark: Verso and mathlib/nightly-testing-* must be on the same toolchain
+                    # for mathlib's cache to successfully download.
+                    lines[index] = f'require mathlib from git "https://github.com/leanprover-community/mathlib4-nightly-testing.git" @ "{verso_lean_version.replace("nightly", "nightly-testing")}"' 
                 elif re.match(r"^package", line) and useO0:
                     lines[index] = line + '  moreLeancArgs := #["-O0"]\n'
                 else:
                     lines[index] = line.replace(
                         f'"{project_lean_version}"', f'"{verso_lean_version}"'
                     )
+                if re.match(r"^require mathlib from ", line):
+                    # `lake update` sometimes doesn't fetch mathlib cache (e.g. on nightly branches)
+                    needs_mathlib_cache_get = True
         with open(lakefile, "w") as f:
             f.write("".join(lines))
         append_result("checkout", "success", 1, more_is_better=True)
-        return True
+        return (True, needs_mathlib_cache_get)
     except Exception as e:
         print(e)
         append_result("checkout", "success", 0, more_is_better=True)
-        return False
+        return (False, False)
 
 
-def project_build_default(project_directory: Path) -> float | None:
+def project_install_deps(project_directory: Path, needs_mathlib_cache_get: bool) -> bool:
     try:
         subprocess.run(
             ["lake", "update", "--no-ansi", "--keep-toolchain"],
             cwd=project_directory,
             check=True,
         )
+        if needs_mathlib_cache_get:
+            subprocess.run(
+                ["lake", "exe", "cache", "get"],
+                cwd=project_directory,
+                check=True,
+            )
+        return True
+    except subprocess.SubprocessError as e:
+        print(f"installing dependencies failed {e}")
+        return False
+    except Exception as e:
+        print(f"unexpected error {e}")
+        return False
+
+def project_build_default(project_directory: Path) -> float | None:
+    try:
         start: float = time.time()
         result = subprocess.run(
             ["lake", "build", "--no-ansi", "--keep-toolchain"],
@@ -359,7 +383,7 @@ def main() -> None:
             print(f"--project-branch must be provided when not using --skip-checkout", file=sys.stderr)
             sys.exit(1)
 
-        did_checkout = checkout_project(
+        [did_checkout, needs_mathlib_cache_get] = checkout_project(
             verso_directory=verso_directory,
             gitUrl=args.project_url,
             branch=args.project_branch,
@@ -368,6 +392,7 @@ def main() -> None:
         )
     else:
         did_checkout = True
+        needs_mathlib_cache_get = False
 
     if not did_checkout:
         print("checkout did not succeed")
@@ -380,6 +405,11 @@ def main() -> None:
         cwd=verso_directory,
         check=True,
     )
+
+    did_install = project_install_deps(directory, needs_mathlib_cache_get)
+    if not did_install:
+        print("installing dependencies did not succeed")
+        sys.exit(1)
 
     if not args.pre_build_cmd is None:
         subprocess.run([args.pre_build_cmd], cwd=directory, check=True)
