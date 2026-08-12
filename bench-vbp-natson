@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+python3 main.py "$@" -- \
+    --metrics-root vbp-natson-o0 \
+    --exe-name blueprint-gen \
+    --project-url https://github.com/Vtec234/verso-natson.git \
+    --project-branch main \
+    --project-dir verso-natson \
+    --pre-build-cmd ./scripts/pre-build.sh
