@@ -5,7 +5,7 @@ timeout -s KILL 30m python3 main.py "$@" -- \
     --metrics-root refman \
     --exe-name generate-manual \
     --project-url https://github.com/leanprover/reference-manual.git \
-    --project-branch main \
+    --project-branch VERSO_LEAN_TOOLCHAIN \
     --project-dir refman \
     --exe-arg=--depth \
     --exe-arg=2 \

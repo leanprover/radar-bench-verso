@@ -21,6 +21,7 @@ output_path: Path
 root: str
 cmdargs: list[str]
 
+VERSO_LEAN_TOOLCHAIN_MAGIC = "VERSO_LEAN_TOOLCHAIN"
 
 def append_result(
     metric: str,
@@ -89,7 +90,6 @@ def walk_lib_dir(project_directory: Path):
                 append_result(f"build/{module}", "generated olean", size, "B")
     append_result("build/.total", "generated olean", total_olean, "B")
 
-
 def checkout_project(
     verso_directory: Path,
     gitUrl: str,
@@ -112,6 +112,8 @@ def checkout_project(
                 )
             verso_lean_version = versos_lean_toolchain[17:]
 
+        if branch == VERSO_LEAN_TOOLCHAIN_MAGIC:
+            branch = verso_lean_version 
         subprocess.run(
             [
                 "git",
@@ -356,7 +358,7 @@ def main() -> None:
     parser.add_argument("--exe-arg", action="append", help="additional argument to pass to the doc generator (use --exe-arg=--foo syntax)", default=[])
     parser.add_argument("--opt", type=str, help="optimization level for native compilation (must be o0 if provided)")
     parser.add_argument("--project-url", type=str, help="Git URL of the project to benchmark")
-    parser.add_argument("--project-branch", type=str, help="branch of the project to clone")
+    parser.add_argument("--project-branch", type=str, help=f"branch/tag of the project to clone; the special value {VERSO_LEAN_TOOLCHAIN_MAGIC} uses Verso's toolchain (e.g. v4.33.0) as the tag")
     parser.add_argument("--project-dir", type=Path, help="directory to clone the project into (or to read the project from with --skip-checkout)", default="project")
     parser.add_argument("--skip-checkout", action="store_true", help="do not clone the project, assuming it is already in --project-dir")
     parser.add_argument("--verso-dir", type=Path, help="Verso checkout directory")
