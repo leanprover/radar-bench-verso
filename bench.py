@@ -150,9 +150,9 @@ def checkout_project(
                     # for mathlib's cache to successfully download.
                     lines[index] = f'require mathlib from git "https://github.com/leanprover-community/mathlib4-nightly-testing.git" @ "{verso_lean_version.replace("nightly", "nightly-testing")}"' 
                 elif re.match(r"^require VersoBlueprint from ", line):
-                    # VersoBlueprint does not publish -rc tags.
-                    project_lean_trunc = re.sub(r'-rc\d+$', '', project_lean_version)
-                    verso_lean_trunc = re.sub(r'-rc\d+$', '', verso_lean_version)
+                    # VersoBlueprint only publishes v4.N.0 tags.
+                    project_lean_trunc = re.sub(r'\d+(-rc\d+)?$', '0', project_lean_version)
+                    verso_lean_trunc = re.sub(r'\d+(-rc\d+)?$', '0', verso_lean_version)
                     lines[index] = line.replace(
                         f'"{project_lean_trunc}"', f'"{verso_lean_trunc}"'
                     )
