@@ -90,6 +90,23 @@ def walk_lib_dir(project_directory: Path):
                 append_result(f"build/{module}", "generated olean", size, "B")
     append_result("build/.total", "generated olean", total_olean, "B")
 
+def repo_has_tag(repo_url: str, tag: str) -> bool:
+    proc = subprocess.run(
+        ["git", "ls-remote", "--exit-code", "--tags", repo_url, f"refs/tags/{tag}"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        # Fail instead of asking for credentials
+        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+    )
+    if proc.returncode == 0:
+        return True
+    if proc.returncode == 2:
+        return False
+    raise RuntimeError(
+        f"git ls-remote failed (code {proc.returncode}): {proc.stderr.strip()}"
+    )
+
 def checkout_project(
     verso_directory: Path,
     gitUrl: str,
@@ -150,14 +167,22 @@ def checkout_project(
                     # Mathlib nightly-testing-* tags live in a different repository - switch to that one.
                     # Remark: Verso and mathlib/nightly-testing-* must be on the same toolchain
                     # for mathlib's cache to successfully download.
-                    lines[index] = f'require mathlib from git "https://github.com/leanprover-community/mathlib4-nightly-testing.git" @ "{verso_lean_version.replace("nightly", "nightly-testing")}"' 
+                    nightly_repo = "https://github.com/leanprover-community/mathlib4-nightly-testing.git"
+                    nightly_tag = verso_lean_version.replace("nightly", "nightly-testing")
+                    if repo_has_tag(nightly_repo, nightly_tag):
+                        lines[index] = f'require mathlib from git "{nightly_repo}" @ "{nightly_tag}"' 
+                    else:
+                        # Use the general tag on a best-effort basis
+                        print(f"WARNING: Using mathlib @ nightly-testing instead of mathlib @ {nightly_tag}", file=sys.stderr)
+                        lines[index] = f'require mathlib from git "{nightly_repo}" @ "nightly-testing"' 
                 elif re.match(r"^require VersoBlueprint from ", line):
                     # VersoBlueprint only publishes v4.N.0 tags.
-                    project_lean_trunc = re.sub(r'\d+(-rc\d+)?$', '0', project_lean_version)
                     verso_lean_trunc = re.sub(r'\d+(-rc\d+)?$', '0', verso_lean_version)
-                    lines[index] = line.replace(
-                        f'"{project_lean_trunc}"', f'"{verso_lean_trunc}"'
-                    )
+                    vbp_repo = "https://github.com/leanprover/verso-blueprint.git"
+                    if repo_has_tag(vbp_repo, verso_lean_trunc):
+                        lines[index] = f'require VersoBlueprint from git "{vbp_repo}" @ "{verso_lean_trunc}"'
+                    else:
+                        print(f"WARNING: Using VersoBlueprint @ <current tag> instead of VersoBlueprint @ {verso_lean_trunc}", file=sys.stderr)
                 elif re.match(r"^package", line) and useO0:
                     lines[index] = line + '  moreLeancArgs := #["-O0"]\n'
                 else:
