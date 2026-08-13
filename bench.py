@@ -10,7 +10,7 @@
 
 import argparse
 import json
-import os.path
+import os
 import re
 import subprocess
 import sys
@@ -90,9 +90,9 @@ def walk_lib_dir(project_directory: Path):
                 append_result(f"build/{module}", "generated olean", size, "B")
     append_result("build/.total", "generated olean", total_olean, "B")
 
-def repo_has_tag(repo_url: str, tag: str) -> bool:
+def repo_has_rev(repo_url: str, rev: str) -> bool:
     proc = subprocess.run(
-        ["git", "ls-remote", "--exit-code", "--tags", repo_url, f"refs/tags/{tag}"],
+        ["git", "ls-remote", "--exit-code", repo_url, f"refs/tags/{rev}", f"refs/heads/{rev}"],
         capture_output=True,
         text=True,
         timeout=30,
@@ -169,20 +169,20 @@ def checkout_project(
                     # for mathlib's cache to successfully download.
                     nightly_repo = "https://github.com/leanprover-community/mathlib4-nightly-testing.git"
                     nightly_tag = verso_lean_version.replace("nightly", "nightly-testing")
-                    if repo_has_tag(nightly_repo, nightly_tag):
-                        lines[index] = f'require mathlib from git "{nightly_repo}" @ "{nightly_tag}"' 
+                    if repo_has_rev(nightly_repo, nightly_tag):
+                        lines[index] = f'require mathlib from git "{nightly_repo}" @ "{nightly_tag}"\n' 
                     else:
                         # Use the general tag on a best-effort basis
                         print(f"WARNING: Using mathlib @ nightly-testing instead of mathlib @ {nightly_tag}", file=sys.stderr)
-                        lines[index] = f'require mathlib from git "{nightly_repo}" @ "nightly-testing"' 
+                        lines[index] = f'require mathlib from git "{nightly_repo}" @ "nightly-testing"\n' 
                 elif re.match(r"^require VersoBlueprint from ", line):
-                    # VersoBlueprint only publishes v4.N.0 tags.
+                    # VersoBlueprint only publishes v4.N.0 branches.
                     verso_lean_trunc = re.sub(r'\d+(-rc\d+)?$', '0', verso_lean_version)
                     vbp_repo = "https://github.com/leanprover/verso-blueprint.git"
-                    if repo_has_tag(vbp_repo, verso_lean_trunc):
-                        lines[index] = f'require VersoBlueprint from git "{vbp_repo}" @ "{verso_lean_trunc}"'
+                    if repo_has_rev(vbp_repo, verso_lean_trunc):
+                        lines[index] = f'require VersoBlueprint from git "{vbp_repo}" @ "{verso_lean_trunc}"\n'
                     else:
-                        print(f"WARNING: Using VersoBlueprint @ <current tag> instead of VersoBlueprint @ {verso_lean_trunc}", file=sys.stderr)
+                        print(f"WARNING: Using '{line.strip()}' instead of VersoBlueprint @ {verso_lean_trunc}", file=sys.stderr)
                 elif re.match(r"^package", line) and useO0:
                     lines[index] = line + '  moreLeancArgs := #["-O0"]\n'
                 else:
