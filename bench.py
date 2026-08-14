@@ -160,9 +160,11 @@ def checkout_project(
         needs_mathlib_cache_get = False
         with open(lakefile) as f:
             lines = f.readlines()
+            required_verso = False
             for index, line in enumerate(lines):
                 if re.match(r"^require verso from ", line):
                     lines[index] = f'require verso from "{verso_directory}"\n'
+                    required_verso = True
                 elif re.match(r"^require mathlib from ", line) and "nightly" in verso_lean_version:
                     # Mathlib nightly-testing-* tags live in a different repository - switch to that one.
                     # Remark: Verso and mathlib/nightly-testing-* must be on the same toolchain
@@ -192,6 +194,8 @@ def checkout_project(
                 if re.match(r"^require mathlib from ", line):
                     # `lake update` sometimes doesn't fetch mathlib cache (e.g. on nightly branches)
                     needs_mathlib_cache_get = True
+            if not required_verso:
+                raise Exception("lakefile.lean has no 'require verso', cannot point at benchmark commit")
         with open(lakefile, "w") as f:
             f.write("".join(lines))
         append_result("checkout", "success", 1, more_is_better=True)
