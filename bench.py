@@ -22,6 +22,7 @@ root: str
 cmdargs: list[str]
 
 VERSO_LEAN_TOOLCHAIN_MAGIC = "VERSO_LEAN_TOOLCHAIN"
+HEADER_END_PATH = Path(__file__).resolve().parent / "HeaderEnd.lean"
 
 def append_result(
     metric: str,
@@ -296,6 +297,19 @@ def project_measure_exe(project_directory: Path, exe_name: str) -> bool:
         append_result("execute", "success", 0, more_is_better=True)
         return False
 
+
+def header_end_pos(project_directory: Path, file: Path) -> tuple[int, int]:
+    """Position (1-based line, 0-based column) of the first token after the header of `file`."""
+    result = subprocess.run(
+        ["lean", "--run", str(HEADER_END_PATH), str(file)],
+        # Use the project's Lean toolchain
+        cwd=project_directory,
+        stdout=subprocess.PIPE,
+        text=True,
+        check=True,
+    )
+    [line, col] = result.stdout.strip().split(':')
+    return (int(line), int(col))
 def parse_time(time: str):
     time = time.strip()
     match_val = re.match(r"([0-9.]+)ms$", time)
