@@ -1,6 +1,7 @@
-/- Prints the position (1-based line, 0-based column)
-of the first token after the header of a Lean file. -/
 import Lean.Elab.Import
+
+/-! Prints the position (1-based line, 0-based column)
+of the first token after the header of a Lean file. -/
 
 open Lean
 

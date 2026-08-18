@@ -22,7 +22,12 @@ root: str
 cmdargs: list[str]
 
 VERSO_LEAN_TOOLCHAIN_MAGIC = "VERSO_LEAN_TOOLCHAIN"
+
+INTERACTIVE_BENCH_PATH = Path(__file__).resolve().parent / "InteractiveBench.lean"
 HEADER_END_PATH = Path(__file__).resolve().parent / "HeaderEnd.lean"
+
+# Command inserted to trigger re-elaboration
+DUMMY_COMMAND = '#check "radar_interactive_edit"'
 
 def append_result(
     metric: str,
@@ -202,7 +207,7 @@ def checkout_project(
         append_result("checkout", "success", 1, more_is_better=True)
         return (True, needs_mathlib_cache_get)
     except Exception as e:
-        print(e)
+        print(e, file=sys.stderr)
         append_result("checkout", "success", 0, more_is_better=True)
         return (False, False)
 
@@ -221,67 +226,35 @@ def project_install_deps(project_directory: Path, needs_mathlib_cache_get: bool)
                 check=True,
             )
         return True
-    except subprocess.SubprocessError as e:
-        print(f"installing dependencies failed {e}")
-        return False
     except Exception as e:
-        print(f"unexpected error {e}")
+        print(e, file=sys.stderr)
         return False
 
-def project_build_default(project_directory: Path) -> float | None:
+def project_build_targets(project_directory: Path, targets: list[str] = []) -> tuple[float, bytes] | None:
     try:
         start: float = time.time()
         result = subprocess.run(
-            ["lake", "build", "--no-ansi", "--keep-toolchain"],
+            ["lake", "build", "--no-ansi", "--keep-toolchain"] + targets,
             cwd=project_directory,
             capture_output=True,
         )
         end: float = time.time()
-        dt = end - start
-        print(dt)
-        append_result("build/default/.total", "wall clock time", dt, "s")
-        process_output("build/default", result.stdout.decode("utf-8"))
         print(result.stderr.decode("utf-8"), file=sys.stderr)
+        if result.returncode:
+            # check_returncode will raise and return None,
+            # so print stdout now.
+            print(result.stdout.decode("utf-8"))
         result.check_returncode()
-        append_result("build/default", "success", 1, more_is_better=True)
-        return dt
-    except subprocess.SubprocessError as e:
-        print(f"compilation failed {e}")
-        append_result("build/default", "success", 0, more_is_better=True)
-        return None
+        return (end - start, result.stdout)
     except Exception as e:
-        print(f"unexpected error {e}")
-        append_result("build/default", "success", 0, more_is_better=True)
+        print(e, file=sys.stderr)
         return None
 
 
-def project_build_exe(project_directory: Path, name: str) -> float | None:
-    try:
-        start: float = time.time()
-        result = subprocess.run(
-            ["lake", "build", name, "--no-ansi", "--keep-toolchain"],
-            cwd=project_directory,
-            capture_output=True,
-        )
-        end: float = time.time()
-        dt = end - start
-        print(dt)
-        append_result("build/exe/.total", "wall clock time", dt, "s")
-        process_output("build/exe", result.stdout.decode("utf-8"))
-        print(result.stderr.decode("utf-8"), file=sys.stderr)
-        result.check_returncode()
-        append_result("build/exe", "success", 1, more_is_better=True)
-        return dt
-    except Exception as e:
-        print(f"unexpected error {e}")
-        append_result("build/exe", "success", 0, more_is_better=True)
-        return None
-
-def project_measure_exe(project_directory: Path, exe_name: str) -> bool:
+def project_measure_exe(project_directory: Path, exe_name: str) -> tuple[float, int] | None:
     try:
         exe_path = Path.cwd() / project_directory / ".lake" / "build" / "bin" / exe_name
         exe_size = os.path.getsize(exe_path)
-        append_result("build/exe", "generated exe", exe_size, "B")
         start: float = time.time()
         subprocess.run(
             [str(exe_path)] + cmdargs,
@@ -289,17 +262,35 @@ def project_measure_exe(project_directory: Path, exe_name: str) -> bool:
             check=True,
         )
         end: float = time.time()
-        append_result("execute", "generation time", end - start, "s")
-        append_result("execute", "success", 1, more_is_better=True)
-        return True
+        return (end - start, exe_size)
     except Exception as e:
-        print(f"unexpected error {e}")
-        append_result("execute", "success", 0, more_is_better=True)
-        return False
+        print(e, file=sys.stderr)
+        return None
+
+
+def project_measure_reelab(project_directory: Path, file_name: str, edit_pos: tuple[int, int]) -> float | None:
+    try:
+        result = subprocess.run(
+            ["lean", "--run", str(INTERACTIVE_BENCH_PATH), str(file_name), DUMMY_COMMAND, str(edit_pos[0]), str(edit_pos[1])],
+            # Use the project's Lean toolchain
+            cwd=project_directory,
+            stdout=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+        timings = dict(re.findall(
+            r"^([a-z- ]+)=([0-9]+)$",
+            result.stdout,
+            re.MULTILINE,
+        ))
+        return int(timings["re-elab time"]) / 1000
+    except Exception as e:
+        print(e, file=sys.stderr)
+        return None
 
 
 def header_end_pos(project_directory: Path, file: Path) -> tuple[int, int]:
-    """Position (1-based line, 0-based column) of the first token after the header of `file`."""
+    """Position (0-based) of the first token after the header of `file`."""
     result = subprocess.run(
         ["lean", "--run", str(HEADER_END_PATH), str(file)],
         # Use the project's Lean toolchain
@@ -309,7 +300,9 @@ def header_end_pos(project_directory: Path, file: Path) -> tuple[int, int]:
         check=True,
     )
     [line, col] = result.stdout.strip().split(':')
-    return (int(line), int(col))
+    return (int(line) - 1, int(col))
+
+
 def parse_time(time: str):
     time = time.strip()
     match_val = re.match(r"([0-9.]+)ms$", time)
@@ -318,8 +311,7 @@ def parse_time(time: str):
     match_val = re.match(r"([0-9.]+)s$", time)
     if match_val:
         return float(match_val[1])
-    print(f"cannot parse time {time}")
-    raise Exception("Cannot parse time")
+    raise Exception(f"Cannot parse time: {time}")
 
 
 total_key_time: dict[str, float] = {}
@@ -388,7 +380,8 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(
         description="Collect timing and output size data from building a Verso project and generating its artifacts. "
-          "Output in Radar format."
+          "Output in Radar format.",
+        allow_abbrev=False,
     )
 
     parser.add_argument(
@@ -398,6 +391,7 @@ def main() -> None:
     )
     parser.add_argument("-r", "--metrics-root", type=str, help="first component of reported Radar metric names", required=True)
     parser.add_argument("-e", "--exe-name", type=str, help="name of the Verso doc generator lean_exe", required=True)
+    parser.add_argument("-f", "--edit-file", type=Path, help="measure CLI re-build and LSP re-elab times after editing this file", required=True)
     parser.add_argument("--exe-arg", action="append", help="additional argument to pass to the doc generator (use --exe-arg=--foo syntax)", default=[])
     parser.add_argument("--opt", type=str, help="optimization level for native compilation (must be o0 if provided)")
     parser.add_argument("--project-url", type=str, help="Git URL of the project to benchmark")
@@ -407,17 +401,20 @@ def main() -> None:
     parser.add_argument("--verso-dir", type=Path, help="Verso checkout directory")
     parser.add_argument("--pre-build-cmd", type=str, help="additional command to run in the project directory after `lake update`, before `lake build`; its time is not measured")
     
-    args = parser.parse_args()
+    args, unknown_args = parser.parse_known_args()
+    if unknown_args:
+        print(f"warning: ignoring unrecognized arguments: {unknown_args}", file=sys.stderr)
 
     output_path = args.output_path
-    directory = args.project_dir
+    # (Only non-globals can be type-annotated here)
+    directory: Path = args.project_dir.resolve()
     root = args.metrics_root
-    binary = args.exe_name
+    binary: str = args.exe_name
     cmdargs = args.exe_arg
     if args.verso_dir is not None:
-        verso_directory = args.verso_dir
+        verso_directory: Path = args.verso_dir
     else:
-        verso_directory = Path(__file__).resolve().parent
+        verso_directory: Path = Path(__file__).resolve().parent
 
     if args.opt == "o0":
         use_o0_optimization = True
@@ -426,6 +423,15 @@ def main() -> None:
         sys.exit(1)
     else:
         use_o0_optimization = False
+
+    if not str(args.edit_file).endswith('.lean'):
+        print(f"--edit-file must end with .lean (got '{args.edit_file}')", file=sys.stderr)
+        sys.exit(1)
+    else:
+        # Hack: compute Lean module name assuming project_directory is the Lake srcDir
+        mod_name = str(args.edit_file[:-5].replace('/', '.'))
+        # Relativize to project directory
+        args.edit_file = directory / args.edit_file
 
     if not args.skip_checkout:
         if args.project_url is None:
@@ -466,17 +472,29 @@ def main() -> None:
     if not args.pre_build_cmd is None:
         subprocess.run([args.pre_build_cmd], cwd=directory, check=True)
 
-    default_time = project_build_default(directory)
-    if default_time is None:
+    default_res = project_build_targets(directory, [])
+    if default_res is None:
         print("default build step did not succeed")
+        append_result("build/default", "success", 0, more_is_better=True)
         sys.exit(1)
+    else:
+        (dt, stdout) = default_res
+        append_result("build/default/.total", "wall clock time", dt, "s")
+        process_output("build/default", stdout.decode("utf-8"))
+        append_result("build/default", "success", 1, more_is_better=True)
 
-    exe_time = project_build_exe(directory, binary)
-    if exe_time is None:
+    exe_res = project_build_targets(directory, [binary])
+    if exe_res is None:
         print("exe build step did not succeed")
+        append_result("build/exe", "success", 0, more_is_better=True)
         sys.exit(1)
+    else:
+        (dt, stdout) = exe_res
+        append_result("build/exe/.total", "wall clock time", dt, "s")
+        process_output("build/exe", stdout.decode("utf-8"))
+        append_result("build/exe", "success", 1, more_is_better=True)
 
-    append_result("build/.total", "wall clock time", default_time + exe_time, "s")
+    append_result("build/.total", "wall clock time", default_res[0] + exe_res[0], "s")
 
     walk_ir_dir(directory)
     walk_lib_dir(directory)
@@ -489,10 +507,53 @@ def main() -> None:
                 f"build/{top_level_package}/.total", f"{key} time", total, "s"
             )
 
-    did_run = project_measure_exe(directory, binary)
-    if not did_run:
+    run_res = project_measure_exe(directory, binary)
+    if run_res is None:
         print("exe measure step did not succeed")
+        append_result("execute", "success", 0, more_is_better=True)
         sys.exit(1)
+    else:
+        (dt, exe_size) = run_res
+        append_result("build/exe", "generated exe", exe_size, "B")
+        append_result("execute", "generation time", dt, "s")
+        append_result("execute", "success", 1, more_is_better=True)
+
+    (line, col) = header_end_pos(directory, args.edit_file)
+
+    with open(args.edit_file, 'r', encoding="utf-8") as f:
+        lines = f.read().split("\n")
+    if col == 0:
+        lines.insert(line, DUMMY_COMMAND)
+    else:
+        # When header ends in the middle of a line,
+        # split the remainder out into its own line
+        l = lines[line]
+        lines[line] = l[:col]
+        lines.insert(line+1, l[col:])
+        lines.insert(line+1, DUMMY_COMMAND)
+
+    with open(args.edit_file, 'w', encoding="utf-8") as f:
+        f.write('\n'.join(lines))
+
+    exe_res = project_build_targets(directory, [binary])
+    if exe_res is None:
+        print("exe rebuild step did not succeed")
+        append_result(f"rebuild/exe", "success", 0, more_is_better=True)
+        sys.exit(1)
+    else:
+        (dt, stdout) = exe_res
+        append_result("rebuild/exe/.total", "wall clock time", dt, "s")
+        process_output("rebuild/exe", stdout.decode("utf-8"))
+        append_result("rebuild/exe", "success", 1, more_is_better=True)
+
+    reelab_dt = project_measure_reelab(directory, args.edit_file, (line, col))
+    if reelab_dt is None:
+        print("LSP re-elaboration step did not succeed")
+        append_result(f"elab/{mod_name}", "success", 0, more_is_better=True)
+        sys.exit(1)
+    else:
+        append_result(f"elab/{mod_name}", "wall clock time", reelab_dt, "s")
+        append_result(f"elab/{mod_name}", "success", 1, more_is_better=True)
 
 if __name__ == "__main__":
     main()
