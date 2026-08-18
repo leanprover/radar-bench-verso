@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-python3 main.py "$@" -- \
+timeout -s KILL 30m python3 main.py "$@" -- \
     --metrics-root blueprint-natson \
     --exe-name blueprint-gen \
     --project-url https://github.com/Vtec234/verso-natson.git \
