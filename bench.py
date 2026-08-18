@@ -136,7 +136,7 @@ def checkout_project(
             verso_lean_version = versos_lean_toolchain[17:]
 
         if branch == VERSO_LEAN_TOOLCHAIN_MAGIC:
-            branch = verso_lean_version 
+            branch = verso_lean_version
         subprocess.run(
             [
                 "git",
@@ -178,11 +178,11 @@ def checkout_project(
                     nightly_repo = "https://github.com/leanprover-community/mathlib4-nightly-testing.git"
                     nightly_tag = verso_lean_version.replace("nightly", "nightly-testing")
                     if repo_has_rev(nightly_repo, nightly_tag):
-                        lines[index] = f'require mathlib from git "{nightly_repo}" @ "{nightly_tag}"\n' 
+                        lines[index] = f'require mathlib from git "{nightly_repo}" @ "{nightly_tag}"\n'
                     else:
                         # Use the general tag on a best-effort basis
                         print(f"WARNING: Using mathlib @ nightly-testing instead of mathlib @ {nightly_tag}", file=sys.stderr)
-                        lines[index] = f'require mathlib from git "{nightly_repo}" @ "nightly-testing"\n' 
+                        lines[index] = f'require mathlib from git "{nightly_repo}" @ "nightly-testing"\n'
                 elif re.match(r"^require VersoBlueprint from ", line):
                     # VersoBlueprint only publishes v4.N.0 branches.
                     verso_lean_trunc = re.sub(r'\d+(-rc\d+)?$', '0', verso_lean_version)
@@ -268,7 +268,7 @@ def project_measure_exe(project_directory: Path, exe_name: str) -> tuple[float, 
         return None
 
 
-def project_measure_reelab(project_directory: Path, file_name: str, edit_pos: tuple[int, int]) -> float | None:
+def project_measure_reelab(project_directory: Path, file_name: Path, edit_pos: tuple[int, int]) -> float | None:
     try:
         result = subprocess.run(
             ["lean", "--run", str(INTERACTIVE_BENCH_PATH), str(file_name), DUMMY_COMMAND, str(edit_pos[0]), str(edit_pos[1])],
@@ -400,7 +400,7 @@ def main() -> None:
     parser.add_argument("--skip-checkout", action="store_true", help="do not clone the project, assuming it is already in --project-dir")
     parser.add_argument("--verso-dir", type=Path, help="Verso checkout directory")
     parser.add_argument("--pre-build-cmd", type=str, help="additional command to run in the project directory after `lake update`, before `lake build`; its time is not measured")
-    
+
     args, unknown_args = parser.parse_known_args()
     if unknown_args:
         print(f"warning: ignoring unrecognized arguments: {unknown_args}", file=sys.stderr)
