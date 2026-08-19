@@ -3,6 +3,7 @@
 timeout -s KILL 30m python3 main.py "$@" -- \
     --metrics-root blueprint-natson-o0 \
     --exe-name blueprint-gen \
+    --edit-file CarlesonBlueprint/Chapters/Main.lean \
     --project-url https://github.com/Vtec234/verso-natson.git \
     --project-branch main \
     --project-dir verso-natson \
