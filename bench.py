@@ -559,11 +559,11 @@ def main() -> None:
     reelab_dt = project_measure_reelab(directory, args.edit_file, (line, col))
     if reelab_dt is None:
         print("LSP re-elaboration step did not succeed")
-        append_result(f"elab/{mod_name}", "success", 0, more_is_better=True)
+        append_result(f"lsp-elab/{mod_name}", "success", 0, more_is_better=True)
         sys.exit(1)
     else:
-        append_result(f"elab/{mod_name}", "wall clock time", reelab_dt, "s")
-        append_result(f"elab/{mod_name}", "success", 1, more_is_better=True)
+        append_result(f"lsp-elab/{mod_name}", "wall clock time", reelab_dt, "s")
+        append_result(f"lsp-elab/{mod_name}", "success", 1, more_is_better=True)
 
 if __name__ == "__main__":
     main()
