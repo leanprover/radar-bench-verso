@@ -546,6 +546,17 @@ def main() -> None:
         process_output("rebuild/exe", stdout.decode("utf-8"))
         append_result("rebuild/exe", "success", 1, more_is_better=True)
 
+    run_res = project_measure_exe(directory, binary)
+    if run_res is None:
+        print("rebuilt exe measure step did not succeed")
+        append_result("rebuild/html", "success", 0, more_is_better=True)
+        sys.exit(1)
+    else:
+        (dt, _) = run_res
+        append_result("rebuild/html/.total", "wall clock time", dt, "s")
+        append_result("rebuild/html", "success", 1, more_is_better=True)
+        append_result("rebuild/.total", "wall clock time", exe_res[0] + dt, "s")
+
     reelab_dt = project_measure_reelab(directory, args.edit_file, (line, col))
     if reelab_dt is None:
         print("LSP re-elaboration step did not succeed")
