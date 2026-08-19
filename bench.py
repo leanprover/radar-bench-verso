@@ -2,7 +2,7 @@
 # This script is invoked by Radar infrastructure
 # to measure the build time of projects downstream of Verso.
 #
-# If a version of this script exists in verso/bench.py,
+# If a version of this script exists in verso/bench/bench.py,
 # we run that one instead.
 # This allows Verso's git history to track changes to the build process
 # together with changes to how Radar should measure it.
