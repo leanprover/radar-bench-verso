@@ -429,7 +429,7 @@ def main() -> None:
         sys.exit(1)
     else:
         # Hack: compute Lean module name assuming project_directory is the Lake srcDir
-        edit_mod_name = str(args.edit_file[:-5]).replace('/', '.')
+        edit_mod_name = str(args.edit_file)[:-5].replace('/', '.')
         # Relativize to project directory
         args.edit_file = directory / args.edit_file
 
