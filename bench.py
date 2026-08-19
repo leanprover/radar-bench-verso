@@ -494,8 +494,6 @@ def main() -> None:
         process_output("build/exe", stdout.decode("utf-8"))
         append_result("build/exe", "success", 1, more_is_better=True)
 
-    append_result("build/.total", "wall clock time", default_res[0] + exe_res[0], "s")
-
     walk_ir_dir(directory)
     walk_lib_dir(directory)
 
@@ -510,13 +508,14 @@ def main() -> None:
     run_res = project_measure_exe(directory, binary)
     if run_res is None:
         print("exe measure step did not succeed")
-        append_result("execute", "success", 0, more_is_better=True)
+        append_result("build/html", "success", 0, more_is_better=True)
         sys.exit(1)
     else:
         (dt, exe_size) = run_res
         append_result("build/exe", "generated exe", exe_size, "B")
-        append_result("execute", "generation time", dt, "s")
-        append_result("execute", "success", 1, more_is_better=True)
+        append_result("build/html/.total", "wall clock time", dt, "s")
+        append_result("build/html", "success", 1, more_is_better=True)
+        append_result("build/.total", "wall clock time", default_res[0] + exe_res[0] + dt, "s")
 
     (line, col) = header_end_pos(directory, args.edit_file)
 
