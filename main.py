@@ -32,7 +32,7 @@ def main() -> None:
     args = parser.parse_args(argv)
 
     verso_dir = args.target.resolve()
-    verso_bench_path = verso_dir / "bench.py"
+    verso_bench_path = verso_dir / "bench" / "bench.py"
     if verso_bench_path.is_file():
         result = subprocess.run(
             [sys.executable, str(verso_bench_path), str(args.output)] + rest,

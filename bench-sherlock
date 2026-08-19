@@ -3,6 +3,7 @@
 timeout -s KILL 30m python3 main.py "$@" -- \
     --metrics-root sherlock \
     --exe-name sherlock \
+    --edit-file Sherlock/Study001.lean \
     --project-url https://github.com/robsimmons/sherlock-lean.git \
     --project-branch lean \
     --project-dir sherlock
