@@ -97,6 +97,7 @@ def walk_lib_dir(project_directory: Path):
     append_result("build/.total", "generated olean", total_olean, "B")
 
 def repo_has_rev(repo_url: str, rev: str) -> bool:
+    """Check whether a remote repository has a branch or tag with the given name."""
     proc = subprocess.run(
         ["git", "ls-remote", "--exit-code", repo_url, f"refs/tags/{rev}", f"refs/heads/{rev}"],
         capture_output=True,
@@ -112,6 +113,52 @@ def repo_has_rev(repo_url: str, rev: str) -> bool:
     raise RuntimeError(
         f"git ls-remote failed (code {proc.returncode}): {proc.stderr.strip()}"
     )
+
+def repo_fetch_revs(repo_url: str) -> set[str]:
+    """Return the names of all branches and tags in a remote repository."""
+    proc = subprocess.run(
+        ["git", "ls-remote", "--tags", "--heads", repo_url],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        # Fail instead of asking for credentials
+        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"git ls-remote failed (code {proc.returncode}): {proc.stderr.strip()}"
+        )
+    revs = set()
+    for ref_line in proc.stdout.splitlines():
+        ref = ref_line.split("\t")[1]
+        revs.add(re.sub(r"^refs/(tags|heads)/", "", ref))
+    return revs
+
+def parse_lean_version(version: str) -> tuple[int, int] | None:
+    """Return the minor and patch components (Y, Z) of a Lean version `vX.Y.Z[-rcN]`."""
+    m = re.match(r"^v4\.(\d+)\.(\d+)(-rc\d+)?$", version)
+    if m is None:
+        return None
+    return (int(m.group(1)), int(m.group(2)))
+
+def newest_blueprint_rev(repo_url: str, lean_version: str) -> str | None:
+    """
+    Return the latest VersoBlueprint toolchain tag equal to or below `lean_version`,
+    or `None` if such a version cannot be found.
+    VersoBlueprint only publishes `v4.Y.0` branches (no patch versions).
+    """
+    hi = parse_lean_version(lean_version)
+    if hi is None:
+        return None
+    hi_minor, _ = hi
+    revs = repo_fetch_revs(repo_url)
+    for minor in range(hi_minor, 28, -1):
+        rev = f"v4.{minor}.0"
+        if rev in revs:
+            if minor != hi_minor:
+                print(f"WARNING: Using VersoBlueprint @ {rev} instead of v4.{hi_minor}.0", file=sys.stderr)
+            return rev
+    return None
 
 def checkout_project(
     verso_directory: Path,
@@ -184,13 +231,12 @@ def checkout_project(
                         print(f"WARNING: Using mathlib @ nightly-testing instead of mathlib @ {nightly_tag}", file=sys.stderr)
                         lines[index] = f'require mathlib from git "{nightly_repo}" @ "nightly-testing"\n'
                 elif re.match(r"^require VersoBlueprint from ", line):
-                    # VersoBlueprint only publishes v4.N.0 branches.
-                    verso_lean_trunc = re.sub(r'\d+(-rc\d+)?$', '0', verso_lean_version)
                     vbp_repo = "https://github.com/leanprover/verso-blueprint.git"
-                    if repo_has_rev(vbp_repo, verso_lean_trunc):
-                        lines[index] = f'require VersoBlueprint from git "{vbp_repo}" @ "{verso_lean_trunc}"\n'
+                    vbp_rev = newest_blueprint_rev(vbp_repo, verso_lean_version)
+                    if vbp_rev is not None:
+                        lines[index] = f'require VersoBlueprint from git "{vbp_repo}" @ "{vbp_rev}"\n'
                     else:
-                        print(f"WARNING: Using '{line.strip()}' instead of VersoBlueprint @ {verso_lean_trunc}", file=sys.stderr)
+                        print(f"WARNING: Could not find VersoBlueprint tag for Lean {verso_lean_version}, using '{line.strip()}'", file=sys.stderr)
                 elif re.match(r"^package", line) and useO0:
                     lines[index] = line + '  moreLeancArgs := #["-O0"]\n'
                 else:
