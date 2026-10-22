@@ -141,6 +141,14 @@ def parse_lean_version(version: str) -> tuple[int, int] | None:
         return None
     return (int(m.group(1)), int(m.group(2)))
 
+def infer_dependency_ref(toolchain: str) -> str | None:
+    """Only infer dependency refs from release or nightly names, not PR/local aliases."""
+    ref = toolchain.rsplit(":", 1)[-1]
+    if (parse_lean_version(ref) is not None
+            or re.fullmatch(r"nightly(?:-\d{4}-\d{2}-\d{2})?", ref)):
+        return ref
+    return None
+
 def newest_blueprint_rev(repo_url: str, lean_version: str) -> str | None:
     """
     Return the latest VersoBlueprint toolchain tag equal to or below `lean_version`,
@@ -166,6 +174,7 @@ def checkout_project(
     project_directory: Path,
     useO0: bool,
     branch: str,
+    dependency_version: str | None = None,
 ) -> tuple[bool, bool]:
     """
     Checkout a suitably structured Verso project in an indicated directory.
@@ -176,14 +185,17 @@ def checkout_project(
     try:
         with open(verso_directory / "lean-toolchain") as f:
             versos_lean_toolchain = f.read().strip()
-            if not versos_lean_toolchain.startswith("leanprover/lean4:"):
-                raise Exception(
-                    f"lean toolchain for verso isn't a lean4 version: {versos_lean_toolchain}"
-                )
-            verso_lean_version = versos_lean_toolchain[17:]
+        if dependency_version is None:
+            dependency_version = infer_dependency_ref(versos_lean_toolchain)
 
         if branch == VERSO_LEAN_TOOLCHAIN_MAGIC:
-            branch = verso_lean_version
+            if dependency_version is None:
+                raise ValueError(
+                    f"Cannot infer a project branch from toolchain {versos_lean_toolchain!r}. "
+                    "Set --project-branch explicitly, or supply --dependency-version "
+                    "with a downstream release/nightly ref."
+                )
+            branch = dependency_version
         subprocess.run(
             [
                 "git",
@@ -201,11 +213,7 @@ def checkout_project(
         # we can use it to rewrite the lakefile
         with open(Path.cwd() / project_directory / "lean-toolchain") as f:
             project_lean_toolchain = f.read().strip()
-            if not project_lean_toolchain.startswith("leanprover/lean4:"):
-                raise Exception(
-                    f"lean toolchain for project isn't a lean4 version: {project_lean_toolchain}"
-                )
-            project_lean_version = project_lean_toolchain[17:]
+            project_dependency_ref = infer_dependency_ref(project_lean_toolchain)
         with open(Path.cwd() / project_directory / "lean-toolchain", "w") as f:
             f.write(versos_lean_toolchain)
 
@@ -218,30 +226,31 @@ def checkout_project(
                 if re.match(r"^require verso from ", line):
                     lines[index] = f'require verso from "{verso_directory}"\n'
                     required_verso = True
-                elif re.match(r"^require mathlib from ", line) and "nightly" in verso_lean_version:
+                elif (re.match(r"^require mathlib from ", line)
+                      and dependency_version is not None and "nightly" in dependency_version):
                     # Mathlib nightly-testing-* tags live in a different repository - switch to that one.
                     # Remark: Verso and mathlib/nightly-testing-* must be on the same toolchain
                     # for mathlib's cache to successfully download.
                     nightly_repo = "https://github.com/leanprover-community/mathlib4-nightly-testing.git"
-                    nightly_tag = verso_lean_version.replace("nightly", "nightly-testing")
+                    nightly_tag = dependency_version.replace("nightly", "nightly-testing")
                     if repo_has_rev(nightly_repo, nightly_tag):
                         lines[index] = f'require mathlib from git "{nightly_repo}" @ "{nightly_tag}"\n'
                     else:
                         # Use the general tag on a best-effort basis
                         print(f"WARNING: Using mathlib @ nightly-testing instead of mathlib @ {nightly_tag}", file=sys.stderr)
                         lines[index] = f'require mathlib from git "{nightly_repo}" @ "nightly-testing"\n'
-                elif re.match(r"^require VersoBlueprint from ", line):
+                elif re.match(r"^require VersoBlueprint from ", line) and dependency_version is not None:
                     vbp_repo = "https://github.com/leanprover/verso-blueprint.git"
-                    vbp_rev = newest_blueprint_rev(vbp_repo, verso_lean_version)
+                    vbp_rev = newest_blueprint_rev(vbp_repo, dependency_version)
                     if vbp_rev is not None:
                         lines[index] = f'require VersoBlueprint from git "{vbp_repo}" @ "{vbp_rev}"\n'
                     else:
-                        print(f"WARNING: Could not find VersoBlueprint tag for Lean {verso_lean_version}, using '{line.strip()}'", file=sys.stderr)
+                        print(f"WARNING: Could not find VersoBlueprint tag for Lean {dependency_version}, using '{line.strip()}'", file=sys.stderr)
                 elif re.match(r"^package", line) and useO0:
                     lines[index] = line + '  moreLeancArgs := #["-O0"]\n'
-                else:
+                elif dependency_version is not None and project_dependency_ref is not None:
                     lines[index] = line.replace(
-                        f'"{project_lean_version}"', f'"{verso_lean_version}"'
+                        f'"{project_dependency_ref}"', f'"{dependency_version}"'
                     )
                 if re.match(r"^require mathlib from ", line):
                     # `lake update` sometimes doesn't fetch mathlib cache (e.g. on nightly branches)
@@ -442,6 +451,7 @@ def main() -> None:
     parser.add_argument("--opt", type=str, help="optimization level for native compilation (must be o0 if provided)")
     parser.add_argument("--project-url", type=str, help="Git URL of the project to benchmark")
     parser.add_argument("--project-branch", type=str, help=f"branch/tag of the project to clone; the special value {VERSO_LEAN_TOOLCHAIN_MAGIC} uses Verso's toolchain (e.g. v4.33.0) as the tag")
+    parser.add_argument("--dependency-version", type=str, help="release/nightly ref used for dependency rewrites and VERSO_LEAN_TOOLCHAIN; does not change the actual Lean toolchain")
     parser.add_argument("--project-dir", type=Path, help="directory to clone the project into (or to read the project from with --skip-checkout)", default="project")
     parser.add_argument("--skip-checkout", action="store_true", help="do not clone the project, assuming it is already in --project-dir")
     parser.add_argument("--verso-dir", type=Path, help="Verso checkout directory")
@@ -493,6 +503,7 @@ def main() -> None:
             branch=args.project_branch,
             useO0=use_o0_optimization,
             project_directory=directory,
+            dependency_version=args.dependency_version,
         )
     else:
         did_checkout = True
